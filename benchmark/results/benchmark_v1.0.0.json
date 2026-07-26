@@ -9,7 +9,7 @@
   "precision_at_k": 1.0,
   "coverage": 1.0,
   "false_positive_rate": 0.25,
-  "avg_time_ms": 0.13852306249972912,
+  "avg_time_ms": 0.11393468749965052,
   "rule_stats": {
     "KEY001": {
       "fired": 16,

@@ -10,7 +10,7 @@ Precision@1:         100%
 Precision@3:         100%
 Coverage:            100%
 False positive rate: 25%
-Avg analysis time:   0.14 ms
+Avg analysis time:   0.11 ms
 
 Confidence calibration (bucket -> observed accuracy, n):
   [0.4-0.5): accuracy=60%  n=5
@@ -24,8 +24,8 @@ Rule statistics
     False positives:  4
     Missed:           0  (expected to fire, didn't)
     Avg confidence:   0.57
-    Avg exec time:    0.030 ms
-    P95 exec time:    0.073 ms
+    Avg exec time:    0.025 ms
+    P95 exec time:    0.044 ms
   KEY002
     Fired:            4
     Correct:          4
@@ -33,15 +33,15 @@ Rule statistics
     Missed:           0  (expected to fire, didn't)
     Avg confidence:   0.95
     Avg exec time:    0.002 ms
-    P95 exec time:    0.006 ms
+    P95 exec time:    0.005 ms
   KEY003
     Fired:            2
     Correct:          2
     False positives:  0
     Missed:           0  (expected to fire, didn't)
     Avg confidence:   0.90
-    Avg exec time:    0.002 ms
-    P95 exec time:    0.005 ms
+    Avg exec time:    0.001 ms
+    P95 exec time:    0.004 ms
 
 False positives (expected NO rule to fire, but one did):
   KEY001-043 [handwritten]: got ['KEY001']
