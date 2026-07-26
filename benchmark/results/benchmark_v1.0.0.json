@@ -1,0 +1,36 @@
+{
+  "n_cases": 32,
+  "total_positive": 16,
+  "total_negative": 16,
+  "matched": 20,
+  "abstained": 12,
+  "abstention_rate": 0.375,
+  "precision_at_1": 1.0,
+  "precision_at_k": 1.0,
+  "coverage": 1.0,
+  "false_positive_rate": 0.25,
+  "avg_time_ms": 0.13852306249972912,
+  "rule_stats": {
+    "KEY001": {
+      "fired": 16,
+      "correct": 10,
+      "false_positive": 4,
+      "missed": 0,
+      "avg_confidence": 0.571875
+    },
+    "KEY002": {
+      "fired": 4,
+      "correct": 4,
+      "false_positive": 0,
+      "missed": 0,
+      "avg_confidence": 0.95
+    },
+    "KEY003": {
+      "fired": 2,
+      "correct": 2,
+      "false_positive": 0,
+      "missed": 0,
+      "avg_confidence": 0.9
+    }
+  }
+}

@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tracekit"
+version = "1.0.0"
+description = "Diagnoses common Python exceptions and suggests likely (not certain) causes, without hiding the original traceback."
+requires-python = ">=3.10"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=6.0",
+    "hypothesis>=6.100",
+]
+
+[tool.setuptools.packages.find]
+include = ["tracekit*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["tracekit"]
+omit = ["*/tests/*"]
