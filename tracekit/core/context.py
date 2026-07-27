@@ -135,7 +135,7 @@ def _safe_extract_nested_sections(value: Any) -> dict[str, list[str]]:
     for plain `dict` values (not DataFrame-like or other mapping
     types, which have no comparable nested-key structure). Never
     recurses past one level: this is a deliberate scope boundary for
-    KEY003, not an oversight — see keyerror_rules.py.
+    KEY003, not an oversight — see rules/keyerror/rules.py.
     """
     sections: dict[str, list[str]] = {}
     if not isinstance(value, dict):

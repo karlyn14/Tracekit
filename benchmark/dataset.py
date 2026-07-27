@@ -53,6 +53,28 @@ def load_cases(filename: str) -> list[BenchmarkCase]:
     return cases
 
 
+def load_all_cases() -> list[BenchmarkCase]:
+    """
+    Load every `*_cases.jsonl` file in benchmark/data/, so adding a new
+    exception family (e.g. attributeerror_cases.jsonl) is purely
+    additive — no changes needed here or in run.py. Case IDs must be
+    unique across ALL files combined; duplicates are a benchmark
+    authoring bug, not something to silently allow.
+    """
+    all_cases: list[BenchmarkCase] = []
+    seen_ids: set[str] = set()
+    for path in sorted(DATA_DIR.glob("*_cases.jsonl")):
+        for case in load_cases(path.name):
+            if case.id in seen_ids:
+                raise ValueError(
+                    f"Duplicate benchmark case id {case.id!r} found in {path.name} "
+                    f"— case IDs must be unique across all dataset files."
+                )
+            seen_ids.add(case.id)
+            all_cases.append(case)
+    return all_cases
+
+
 def run_case(case: BenchmarkCase) -> tuple[BaseException, Optional[types.TracebackType]]:
     """
     Execute the case's code in an isolated namespace and capture the

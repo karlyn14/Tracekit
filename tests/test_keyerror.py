@@ -3,7 +3,7 @@ import pytest
 from tracekit.core.context import ExceptionContext
 from tracekit.core.registry import RuleRegistry
 from tracekit.core.rule import MatchResult, Rule
-from tracekit.rules.keyerror_rules import KeyErrorTypoRule
+from tracekit.rules.keyerror.rules import KeyErrorTypoRule
 
 
 def _make_ctx(data: dict, missing_key: str) -> ExceptionContext:
@@ -23,7 +23,7 @@ def test_key001_abstains_on_ambiguous_tie():
     assert result is None
 
 
-from tracekit.rules.keyerror_rules import KeyErrorCaseMismatchRule, KeyErrorTypoRule
+from tracekit.rules.keyerror.rules import KeyErrorCaseMismatchRule, KeyErrorTypoRule
 from tracekit.core.registry import RuleRegistry
 
 
@@ -57,7 +57,7 @@ def test_key002_outranks_key001_when_both_could_apply():
     assert top_rule.RULE_ID == "KEY002"
 
 
-from tracekit.rules.keyerror_rules import (
+from tracekit.rules.keyerror.rules import (
     KeyErrorCaseMismatchRule,
     KeyErrorNestedSectionRule,
     KeyErrorTypoRule,

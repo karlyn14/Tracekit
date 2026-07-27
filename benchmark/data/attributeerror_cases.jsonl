@@ -1,0 +1,6 @@
+{"id": "ATTR001-001", "source": "handwritten", "split": "train", "category": "none_attribute", "expected_rule_id": "ATTR001", "code": "def f():\n    user = None\n    return user.name\nf()"}
+{"id": "ATTR001-002", "source": "handwritten", "split": "train", "category": "none_attribute", "expected_rule_id": "ATTR001", "code": "def f():\n    user = None\n    return user.append(1)\nf()"}
+{"id": "ATTR001-003", "source": "handwritten", "split": "test", "category": "none_via_function_return", "expected_rule_id": "ATTR001", "code": "def f():\n    def get_user():\n        return None\n    u = get_user()\n    return u.read()\nf()"}
+{"id": "ATTR001-004", "source": "handwritten", "split": "train", "category": "genuine_missing_attribute", "expected_rule_id": null, "code": "def f():\n    class Foo:\n        pass\n    obj = Foo()\n    return obj.some_unrelated_attribute\nf()"}
+{"id": "ATTR001-005", "source": "handwritten", "split": "train", "category": "future_attr002_wrong_method", "expected_rule_id": "ATTR002", "code": "def f():\n    text = 'hello'\n    return text.append('!')\nf()"}
+{"id": "ATTR001-006", "source": "handwritten", "split": "test", "category": "future_attr003_typo", "expected_rule_id": "ATTR003", "code": "def f():\n    class User:\n        def __init__(self):\n            self.name = 'Ada'\n    u = User()\n    return u.nmae\nf()"}

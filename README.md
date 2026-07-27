@@ -231,7 +231,7 @@ python demo.py --fast   # no pauses, good for CI or a quick check
 
 ## Testing & CI
 
-- **22 tests, 92% coverage** — unit tests per rule (`tests/test_keyerror_rules.py`)
+- **22 tests, 92% coverage** — unit tests per rule (`tests/test_keyerror.py`)
   plus property-based fuzz tests (`tests/test_property_based.py`, via
   [Hypothesis](https://hypothesis.readthedocs.io/)) that generate ~250
   arbitrary/malformed inputs (unicode keys, missing tracebacks,

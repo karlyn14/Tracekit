@@ -32,7 +32,7 @@ from pathlib import Path
 import tracekit.rules  # noqa: F401 - registers rules as a side effect
 from tracekit.core.analyzer import analyze
 from tracekit.core.registry import default_registry
-from benchmark.dataset import BenchmarkCase, load_cases, run_case
+from benchmark.dataset import BenchmarkCase, load_all_cases, run_case
 
 TOP_K_FOR_PRECISION_AT_K = 3
 CALIBRATION_BUCKET_WIDTH = 0.1
@@ -96,22 +96,49 @@ def _json_safe_stats(stats: dict) -> dict:
     }
 
 
-def evaluate_pending(cases: list[BenchmarkCase], known_ids: set[str]) -> list[dict]:
+def summarize_ground_truth(all_cases: list[BenchmarkCase], known_ids: set[str]) -> dict[str, dict]:
     """
-    Cases whose expected_rule_id names a rule that isn't registered
-    yet. These are ground truth the benchmark commits to ahead of
-    implementation — not scored as failures against rules that exist,
-    just reported honestly as 'awaiting implementation'. If some OTHER
-    already-implemented rule happens to fire on one of these cases,
-    that's flagged too, since it's a real, separate observation worth
-    knowing about.
+    Count train/test cases for every expected_rule_id that isn't
+    registered yet, across the FULL dataset — not just the test
+    split. This is the truthful picture: a rule can have ground truth
+    cases entirely in train (not yet reportable via execution
+    results), entirely in test, or both. The report should reflect
+    that reality rather than the dataset being reshaped to make a
+    report section look complete.
     """
-    pending_report = []
+    counts: dict[str, dict] = defaultdict(lambda: {"train": 0, "test": 0})
+    for case in all_cases:
+        if case.expected_rule_id and case.expected_rule_id not in known_ids:
+            counts[case.expected_rule_id][case.split] += 1
+    return dict(counts)
+
+
+def print_ground_truth_summary(counts: dict) -> None:
+    if not counts:
+        return
+    print("Ground-truth rules (specified in benchmark, not yet implemented)")
+    for rule_id in sorted(counts):
+        c = counts[rule_id]
+        print(f"  {rule_id}")
+        print(f"    Train: {c['train']}")
+        print(f"    Test : {c['test']}")
+        print(f"    Implemented: No")
+    print()
+
+
+def evaluate_pending_test_detail(cases: list[BenchmarkCase]) -> list[dict]:
+    """
+    For pending-rule cases that DO have test-split representation,
+    run them and show exactly what (if anything) fired — useful
+    detail beyond the summary counts above. Rules with zero test-split
+    cases simply won't appear here, which is accurate, not a bug.
+    """
+    detail = []
     for case in cases:
         exc_value, tb = run_case(case)
         result = analyze(exc_value, tb)
         candidate_ids = [c.rule_id for c in result.candidates]
-        pending_report.append(
+        detail.append(
             {
                 "id": case.id,
                 "expected": case.expected_rule_id,
@@ -119,24 +146,22 @@ def evaluate_pending(cases: list[BenchmarkCase], known_ids: set[str]) -> list[di
                 "other_rule_fired": bool(candidate_ids),
             }
         )
-    return pending_report
+    return detail
 
 
-def print_pending_report(pending: list[dict]) -> None:
+def print_pending_test_detail(pending: list[dict]) -> None:
     if not pending:
         return
-    print("Rule support — ground truth defined, implementation pending")
+    print("Pending-rule test-split observations")
     by_rule: dict[str, list[dict]] = defaultdict(list)
     for p in pending:
         by_rule[p["expected"]].append(p)
     for rule_id in sorted(by_rule):
-        entries = by_rule[rule_id]
-        print(f"  {rule_id}: Not implemented yet ⏳  ({len(entries)} benchmark case(s) waiting)")
-        for p in entries:
+        for p in by_rule[rule_id]:
             status = (
                 f"unexpectedly matched by {p['observed']}" if p["other_rule_fired"] else "no rule fired (expected)"
             )
-            print(f"    {p['id']}: expected {p['expected']}, observed {p['observed'] or 'None'} — {status}")
+            print(f"  {p['id']}: expected {p['expected']}, observed {p['observed'] or 'None'} — {status}")
     print()
 
 
@@ -316,7 +341,7 @@ def main() -> None:
     sys.stdout = _Tee(real_stdout, buffer)
 
     try:
-        all_cases = load_cases("keyerror_cases.jsonl")
+        all_cases = load_all_cases()
         test_cases = [c for c in all_cases if c.split == "test"]
         train_cases = [c for c in all_cases if c.split == "train"]
 
@@ -341,8 +366,11 @@ def main() -> None:
         stats = evaluate_split(active_test)
         print_report(stats, "test")
 
-        pending_report = evaluate_pending(pending_test, known_ids)
-        print_pending_report(pending_report)
+        ground_truth_counts = summarize_ground_truth(all_cases, known_ids)
+        print_ground_truth_summary(ground_truth_counts)
+
+        pending_detail = evaluate_pending_test_detail(pending_test)
+        print_pending_test_detail(pending_detail)
     finally:
         sys.stdout = real_stdout
 

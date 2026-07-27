@@ -113,6 +113,6 @@ Diagnoses `config['host']` failing when `config['database']['host']`
 exists — the key is present, just one level down. Deliberately capped
 at exactly one level of nesting (not recursive) and restricted to
 plain `dict` values only. See `KeyErrorNestedSectionRule`'s docstring
-in `rules/keyerror_rules.py` for the full reasoning. Accepted per the
+in `rules/keyerror/rules.py` for the full reasoning. Accepted per the
 acceptance criterion: 100% precision/coverage on its held-out test
 cases, 0% false positives, sub-millisecond execution.

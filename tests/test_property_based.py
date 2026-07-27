@@ -2,7 +2,7 @@
 Property-based robustness tests.
 
 These don't test whether a specific rule fires correctly (see
-test_keyerror_rules.py for that) — they test the weaker but more
+test_keyerror.py for that) — they test the weaker but more
 critical invariant that TraceKit NEVER crashes, no matter how
 malformed the input: missing frames, no traceback at all, arbitrary
 unicode key content, huge dicts, or dicts containing values that
