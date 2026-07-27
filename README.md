@@ -1,7 +1,7 @@
 # TraceKit
 
 ![CI](https://img.shields.io/badge/CI-GitHub%20Actions-blue)
-![Tests](https://img.shields.io/badge/tests-22%20passed-brightgreen)
+![Tests](https://img.shields.io/badge/tests-31%20passed-brightgreen)
 ![Coverage](https://img.shields.io/badge/coverage-92%25-brightgreen)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 
@@ -76,17 +76,31 @@ rules because there was no evidence a declarative schema was needed
 at ~10 rules; the interface is designed so a declarative loader could
 be added later without a rewrite.
 
-### Implemented rules
+### Implemented rules — a strategy matrix, not just a rule count
 
-| Rule   | Strategy                    | What it catches |
-|--------|------------------------------|-----------------|
-| KEY001 | Fuzzy lexical similarity (edit distance, ambiguity-aware) | Likely typos in dict/DataFrame keys |
-| KEY002 | Deterministic case normalization | Key exists with different letter casing |
-| KEY003 | Structural context analysis (one-level nested lookup) | Key exists one level deeper in a nested dict |
+Each new rule is chosen to demonstrate a genuinely different
+diagnostic *strategy*, not just to cover another exception type. The
+architecture's real claim is that it generalizes across exception
+families without redesign — ATTR001 is the first proof of that,
+added with zero changes to the core pipeline (`context.py`,
+`registry.py`, `analyzer.py`, `formatter.py`).
 
-Each rule uses a genuinely different diagnostic strategy — TraceKit
-is not "just edit distance"; it's a small framework for testing
-different diagnostic approaches under one shared evaluation.
+| Family | Rule | Strategy | What it catches |
+|---|---|---|---|
+| KeyError | KEY001 | Fuzzy lexical similarity | Likely typos in dict/DataFrame keys |
+| KeyError | KEY002 | Deterministic normalization | Key exists with different letter casing |
+| KeyError | KEY003 | Structural context analysis | Key exists one level deeper in a nested dict |
+| AttributeError | ATTR001 | Runtime object inspection | Attribute/method accessed on a `None` value |
+
+Ground truth defined ahead of implementation (see `benchmark/README.md`
+"Ground-truth rules" report), reserved for future strategies within
+the AttributeError family specifically so it also spans multiple
+reasoning techniques, not just rule count:
+
+| Rule | Planned strategy |
+|---|---|
+| ATTR002 | API misuse (wrong method for the object's type, e.g. `.append()` on a `str`) |
+| ATTR003 | Attribute-name typo detection (same lexical approach as KEY001, applied to a new family) |
 
 ## Benchmark methodology
 
@@ -113,28 +127,30 @@ Run it: `python -m benchmark.run`
 ## Results
 
 **Scope note, read before citing these numbers anywhere:** every
-percentage below is measured on TraceKit's own 84-case benchmark
-dataset (`benchmark/data/keyerror_cases.jsonl`), split train/test, for
-the KeyError exception type only. It is not a general claim about
-Python error diagnosis, and it is not validated against a truly
-independent, external dataset. Treat these as "measured on this
-benchmark, under this methodology" — not as universal accuracy claims.
-See `benchmark/README.md` for exactly what's in the dataset and its
-known composition/size limitations.
+percentage below is measured on TraceKit's own benchmark dataset
+(`benchmark/data/*_cases.jsonl`, one file per exception family), split
+train/test, currently covering KeyError and AttributeError. It is not
+a general claim about Python error diagnosis, and it is not validated
+against a truly independent, external dataset. Treat these as
+"measured on this benchmark, under this methodology" — not as
+universal accuracy claims. See `benchmark/README.md` for exactly
+what's in the dataset and its known composition/size limitations.
 
 | Rule   | Strategy                     | Precision@1 | Coverage | FP Rate | Avg Confidence | Avg Exec Time |
 |--------|-------------------------------|------------:|---------:|--------:|---------------:|--------------:|
-| KEY001 | Fuzzy lexical similarity       | 100%        | 100%     | ~25%    | 0.57           | 0.030 ms      |
+| KEY001 | Fuzzy lexical similarity       | 100%        | 100%     | ~25%    | 0.57           | 0.025 ms      |
 | KEY002 | Deterministic normalization     | 100%        | 100%     | 0%      | 0.95           | 0.002 ms      |
 | KEY003 | Structural context analysis    | 100%        | 100%     | 0%      | 0.90           | 0.001 ms      |
+| ATTR001| Runtime object inspection      | 100%        | 100%     | 0%      | 0.98           | 0.009 ms      |
 
 **Hypothesis, supported by the above:** deterministic diagnostic
-strategies (KEY002, KEY003) achieve higher precision and zero measured
-false positives compared to heuristic lexical similarity (KEY001),
-though they solve a narrower class of problems. This is expected, not
-a flaw — case-folding and one-level structural lookup are exact checks
-with no room for ambiguity once a match is found; lexical similarity
-is inherently probabilistic.
+strategies (KEY002, KEY003, ATTR001) achieve higher precision and
+zero measured false positives compared to heuristic lexical
+similarity (KEY001), though they solve a narrower class of problems.
+This pattern held again when the architecture was extended to a
+second exception family entirely, which is itself evidence the
+finding is about the diagnostic strategy, not something specific to
+KeyError.
 
 ## Known limitations (documented, not hidden)
 
@@ -190,6 +206,18 @@ work:
   raised the measured KEY001 false-positive rate from 10% to ~25% —
   not a regression, but the dataset doing exactly what it was
   expanded to do.
+- **The architecture generalized to a second exception family with
+  zero core changes.** Adding ATTR001 (AttributeError) touched exactly
+  two files — the new rule and its registration — and required no
+  changes to `ExceptionContext`, `RuleRegistry`, `Analyzer`, or
+  `Formatter`. This is the first real evidence that the pipeline
+  designed around KeyError wasn't accidentally KeyError-specific.
+- **Reporting gaps should be fixed in the report, not the dataset.**
+  When a pending rule's only ground-truth case happened to sit in the
+  train split (making it invisible in a test-split-only pending
+  report), the fix was to make the report honestly show train/test
+  counts for every un-implemented rule — not to add a manufactured
+  benchmark case just to make a status table look complete.
 
 ## Releases
 
@@ -209,14 +237,48 @@ Key design decisions, with rationale and consequences, in `docs/adr/`:
 
 Prepared answers to the core viva questions: [docs/viva_prep.md](docs/viva_prep.md)
 
-## Future work
+## Roadmap
 
-- KEY004+: additional exception types beyond KeyError (AttributeError,
-  IndexError, TypeError)
-- Frame-walking for upstream causal chains (documented v1 limitation)
-- A declarative rule format, if/when the rule count justifies it (see
-  "Rule engine" above)
+Not "add more rules" — each exception family should demonstrate
+multiple distinct reasoning techniques, so the benchmark keeps
+comparing diagnostic strategies rather than just accumulating count.
+
+**KeyError** (3/3 strategies represented): heuristic lexical (KEY001),
+deterministic normalization (KEY002), structural (KEY003) — complete
+for now.
+
+**AttributeError** (1 of ~3-5 planned): runtime object inspection
+(ATTR001, done). Ground truth already defined for API misuse (ATTR002)
+and typo detection (ATTR003) — see `benchmark/README.md`.
+
+**Future families**, each intended to eventually span multiple
+strategies rather than a single rule: IndexError, TypeError,
+ValueError, ImportError/ModuleNotFoundError, ZeroDivisionError,
+FileNotFoundError.
+
+**Beyond new rules:**
+- Frame-walking for upstream causal chains (v1 only diagnoses the
+  raise site — documented limitation, applies across all families)
+- A declarative rule format, if/when rule count actually justifies it
+  (ADR 0001 — deliberately not built prematurely)
+- A richer shared `RuleResult` abstraction, if/when enough rules
+  across enough families are visibly duplicating the same
+  confidence/evidence/fix construction — deliberately not built now,
+  since one AttributeError rule isn't evidence of that yet
 - `sys.excepthook` integration for zero-config drop-in use
+- IDE integration, PyPI packaging, plugin API for third-party rule
+  packs — real directions, explicitly not v1 scope
+
+## Suite health (tracked over time, not just a snapshot)
+
+The exact test count matters less than whether the suite stays fast
+and the coverage trend holds as the project grows — tracking both
+here rather than only quoting a single current number.
+
+| Milestone | Tests | Test runtime | Benchmark runtime | Coverage |
+|---|---:|---:|---:|---:|
+| v1.0.0 (KEY001-003) | 22 | ~0.6s | ~0.05s | 92% |
+| ATTR001 added | 31 | ~0.9s | ~0.07s | 92% |
 
 ## Demo
 
@@ -231,7 +293,8 @@ python demo.py --fast   # no pauses, good for CI or a quick check
 
 ## Testing & CI
 
-- **22 tests, 92% coverage** — unit tests per rule (`tests/test_keyerror.py`)
+- **31 tests, 92% coverage** — unit tests per rule
+  (`tests/test_keyerror.py`, `tests/test_attributeerror.py`)
   plus property-based fuzz tests (`tests/test_property_based.py`, via
   [Hypothesis](https://hypothesis.readthedocs.io/)) that generate ~250
   arbitrary/malformed inputs (unicode keys, missing tracebacks,

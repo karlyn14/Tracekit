@@ -15,25 +15,41 @@ give every rule addition an honest, held-out score.
 
 ## Dataset design
 
-`data/keyerror_cases.jsonl` — one JSON object per line. Fields:
+`data/*_cases.jsonl` — one file per exception family
+(`keyerror_cases.jsonl`, `attributeerror_cases.jsonl`, more as new
+families are added), loaded together by `load_all_cases()`. Adding a
+new family's dataset file requires no changes to `run.py` — this is
+what makes multi-family evaluation additive rather than a rewrite each
+time. Case IDs must be unique across ALL files combined (enforced at
+load time), and each rule family's ID prefix (`KEY`, `ATTR`, ...)
+keeps cases traceable to the exception type and strategy they validate.
+
+Fields, one JSON object per line:
 
 | field               | meaning |
 |---------------------|---------|
 | `source`             | `handwritten`, `stackoverflow`, or `github_issue` — kept distinct on purpose. A benchmark built from one source (e.g. only Stack Overflow) risks overfitting to that source's conventions and can't tell you whether the tool generalizes to real production code. |
 | `split`              | `train` or `test`. **Rules are only designed and tuned against `train` cases.** All metrics reported by `run.py` are computed exclusively on `test` — cases the rules were never adjusted against. This is the direct fix for dataset leakage: writing a rule by reading a case and then "testing" on that same case proves nothing. |
-| `expected_rule_id`   | The `RULE_ID` that should be the top candidate. **`null` is deliberate and important** — it marks a negative/adversarial case where NO rule should fire. Without negative cases, a benchmark can only ever report how often the tool finds something; it can't reveal how often the tool wrongly claims a cause when there isn't one. |
+| `expected_rule_id`   | The `RULE_ID` that should be the top candidate. **`null` is deliberate and important** — it marks a negative/adversarial case where NO rule should fire. Without negative cases, a benchmark can only ever report how often the tool finds something; it can't reveal how often the tool wrongly claims a cause when there isn't one. Can also name a rule that doesn't exist yet — see "Rule support" below. |
 
 ### Current state
 
-As of this snapshot: **82 cases** (51 train / 31 test), spanning:
-- `handwritten`, `stackoverflow`, `github_issue` sources, roughly balanced
-- Categories: `typo`, `case_mismatch`, `ambiguous` (deliberate ties —
-  should abstain), `similar_but_different` (adversarial — same-length,
-  low-edit-distance identifiers that are NOT typos of each other),
-  `non_typo_missing`, `missing_config`, `nested_dict_assigned`,
-  `nested_dict_unassigned` (documents a known scope limitation —
-  see `context.py`), `dict_comprehension`, `pandas_column`,
-  `future_key003_nested` (ground truth for an unimplemented rule)
+**KeyError** (`keyerror_cases.jsonl`): 84 cases (52 train / 32 test).
+**AttributeError** (`attributeerror_cases.jsonl`): 6 cases (4 train /
+2 test) — small by design, since ATTR001 is a narrow, deterministic
+rule; will grow alongside ATTR002/ATTR003 as they're implemented.
+
+KeyError categories: `typo`, `case_mismatch`, `ambiguous` (deliberate
+ties — should abstain), `similar_but_different` (adversarial —
+same-length, low-edit-distance identifiers that are NOT typos of each
+other), `non_typo_missing`, `missing_config`, `nested_dict_assigned`,
+`nested_dict_unassigned` (documents a known scope limitation — see
+`context.py`), `dict_comprehension`, `pandas_column`.
+
+AttributeError categories: `none_attribute`, `none_via_function_return`,
+`genuine_missing_attribute` (true negative for ATTR001),
+`future_attr002_wrong_method`, `future_attr003_typo` (ground truth for
+unimplemented rules).
 
 ### Known, accepted limitation: edit-distance false positives
 
@@ -81,21 +97,26 @@ PR / commit, don't leave it implicit.
 
 ## Rule strategy summary
 
-| Rule   | Strategy                     | Precision@1 | Coverage | FP Rate | Avg Confidence |
-|--------|-------------------------------|------------:|---------:|--------:|---------------:|
-| KEY001 | Fuzzy lexical similarity       | 100%        | 100%     | ~25%    | 0.57           |
-| KEY002 | Deterministic normalization     | 100%        | 100%     | 0%      | 0.95           |
-| KEY003 | Structural context analysis    | 100%        | 100%     | 0%      | 0.90           |
+| Rule    | Strategy                     | Precision@1 | Coverage | FP Rate | Avg Confidence |
+|---------|-------------------------------|------------:|---------:|--------:|---------------:|
+| KEY001  | Fuzzy lexical similarity       | 100%        | 100%     | ~25%    | 0.57           |
+| KEY002  | Deterministic normalization     | 100%        | 100%     | 0%      | 0.95           |
+| KEY003  | Structural context analysis    | 100%        | 100%     | 0%      | 0.90           |
+| ATTR001 | Runtime object inspection      | 100%        | 100%     | 0%      | 0.98           |
 
 TraceKit is not "just edit distance" — each rule uses a genuinely
 different diagnostic strategy, evaluated under one shared methodology.
-The pattern above is itself a finding: both deterministic rules
-(KEY002, KEY003) hit 0% false positives with near-instant execution,
-while the one heuristic rule (KEY001) carries all of the measured
-false-positive risk in this dataset. This is expected, not a flaw —
-lexical similarity is inherently probabilistic, while case-folding and
-one-level structural lookup are exact checks with no room for
-ambiguity once a match is found.
+The pattern holds across exception families, not just within
+KeyError: the three deterministic rules (KEY002, KEY003, ATTR001) all
+hit 0% false positives with near-instant execution, while the one
+heuristic rule (KEY001) carries all of the measured false-positive
+risk in this dataset. This is expected, not a flaw — lexical
+similarity is inherently probabilistic, while case-folding,
+one-level structural lookup, and reading CPython's own structured
+exception data are exact checks with no room for ambiguity once a
+match is found. ATTR001 reproducing this pattern in a second, entirely
+different exception family is itself evidence the finding is about
+the diagnostic strategy, not an artifact specific to KeyError.
 
 ## Benchmark history
 
@@ -105,9 +126,12 @@ ambiguity once a match is found.
 | v0.2    | 12 cases     | 100%        | 0%      | 100%     | KEY001 fixed to abstain on ambiguous ties (ADR 0002) |
 | v0.5    | 82 cases     | 100%        | 20%     | 100%     | Dataset grown with adversarial negatives; KEY002 added |
 | v1.0.0  | 84 cases     | 100%        | 25%     | 100%     | KEY003 added; FP rate increase is the larger, harder dataset surfacing more of KEY001's known lexical-similarity limitation, not a regression (see README "Known limitations") |
+| ATTR001 | 90 cases     | 100%        | 25% (pooled; ATTR001 itself: 0%) | 100% | First rule for a second exception family; zero core pipeline changes needed (see README "Lessons learned"). Pooled FP rate unchanged from v1.0.0 — see per-rule breakdown in `benchmark/results/` for ATTR001's individual 0% |
 
 Full v1.0.0 output saved as an artifact: `benchmark/results/benchmark_v1.0.0.txt`
 and `.json` (regenerated by `python -m benchmark.run`).
+
+## KEY003 — Missing intermediate dictionary level
 
 Diagnoses `config['host']` failing when `config['database']['host']`
 exists — the key is present, just one level down. Deliberately capped
@@ -116,3 +140,14 @@ plain `dict` values only. See `KeyErrorNestedSectionRule`'s docstring
 in `rules/keyerror/rules.py` for the full reasoning. Accepted per the
 acceptance criterion: 100% precision/coverage on its held-out test
 cases, 0% false positives, sub-millisecond execution.
+
+## ATTR001 — NoneType Attribute Access
+
+Diagnoses `x.name` (or any attribute/method access) failing because
+`x` is `None`. Deterministic — reads `AttributeError.obj`/`.name`
+directly (structured data CPython attaches since Python 3.10) rather
+than parsing the exception's message string. See
+`AttributeErrorNoneTypeRule`'s docstring in `rules/attributeerror/rules.py`
+for the full reasoning. Accepted per the acceptance criterion: 100%
+precision/coverage on its held-out test case, 0% false positives,
+sub-millisecond execution, zero regression on any KeyError rule.
