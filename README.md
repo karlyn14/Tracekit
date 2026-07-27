@@ -112,6 +112,16 @@ Run it: `python -m benchmark.run`
 
 ## Results
 
+**Scope note, read before citing these numbers anywhere:** every
+percentage below is measured on TraceKit's own 84-case benchmark
+dataset (`benchmark/data/keyerror_cases.jsonl`), split train/test, for
+the KeyError exception type only. It is not a general claim about
+Python error diagnosis, and it is not validated against a truly
+independent, external dataset. Treat these as "measured on this
+benchmark, under this methodology" — not as universal accuracy claims.
+See `benchmark/README.md` for exactly what's in the dataset and its
+known composition/size limitations.
+
 | Rule   | Strategy                     | Precision@1 | Coverage | FP Rate | Avg Confidence | Avg Exec Time |
 |--------|-------------------------------|------------:|---------:|--------:|---------------:|--------------:|
 | KEY001 | Fuzzy lexical similarity       | 100%        | 100%     | ~25%    | 0.57           | 0.030 ms      |
@@ -197,6 +207,17 @@ Key design decisions, with rationale and consequences, in `docs/adr/`:
   "Rule engine" above)
 - `sys.excepthook` integration for zero-config drop-in use
 
+## Demo
+
+For a viva or a 2-3 minute video, `demo.py` runs the whole story as
+one command: a normal Python crash → the same crash diagnosed by
+TraceKit → the benchmark run → the test suite passing.
+
+```bash
+python demo.py          # with short pauses, good for narrating live
+python demo.py --fast   # no pauses, good for CI or a quick check
+```
+
 ## Testing & CI
 
 - **22 tests, 92% coverage** — unit tests per rule (`tests/test_keyerror_rules.py`)
@@ -205,6 +226,10 @@ Key design decisions, with rationale and consequences, in `docs/adr/`:
   arbitrary/malformed inputs (unicode keys, missing tracebacks,
   un-repr-able objects, 50-level-deep nesting) to verify the core
   robustness claim: **TraceKit never crashes while diagnosing a crash.**
+  Generate a browsable HTML coverage report with
+  `python -m pytest tests/ --cov=tracekit --cov-report=html` (writes
+  to `htmlcov/index.html` — a screenshot of this is much stronger in
+  a dissertation than a bare percentage).
 - GitHub Actions (`.github/workflows/ci.yml`) runs the full test suite,
   the benchmark (as a regression check), and the smoke test on every
   push, across Python 3.10–3.12.
