@@ -243,13 +243,30 @@ Not "add more rules" — each exception family should demonstrate
 multiple distinct reasoning techniques, so the benchmark keeps
 comparing diagnostic strategies rather than just accumulating count.
 
+**Progress by family** (planned rule counts are working targets, not
+commitments — they'll adjust as each family's benchmark reveals what's
+actually worth building):
+
+| Family | Rules planned | Implemented |
+|---|---:|---:|
+| KeyError | 3 | 3 |
+| AttributeError | 3 | 1 |
+| IndexError | — | 0 |
+| TypeError | — | 0 |
+| ValueError | — | 0 |
+
 **KeyError** (3/3 strategies represented): heuristic lexical (KEY001),
 deterministic normalization (KEY002), structural (KEY003) — complete
 for now.
 
-**AttributeError** (1 of ~3-5 planned): runtime object inspection
+**AttributeError** (1 of 3 planned): runtime object inspection
 (ATTR001, done). Ground truth already defined for API misuse (ATTR002)
-and typo detection (ATTR003) — see `benchmark/README.md`.
+and typo detection (ATTR003) — see `benchmark/README.md`. ATTR002 is
+next, not ATTR003 — it pairs naturally with ATTR001 as a second
+deterministic runtime-inspection rule (`None.foo()` vs
+`"hello".append()`/`[].add()`) before introducing a heuristic strategy;
+mirrors how the KeyError family progressed from deterministic to
+heuristic reasoning.
 
 **Future families**, each intended to eventually span multiple
 strategies rather than a single rule: IndexError, TypeError,
