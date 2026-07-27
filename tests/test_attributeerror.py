@@ -29,9 +29,12 @@ from tracekit.core.registry import RuleRegistry
 from tracekit.output.formatter import format_result
 from tracekit.core.analyzer import AnalysisResult, Candidate
 
-# Deliberately importing a class that does not exist yet — this
-# import failing IS the expected state until ATTR001 is implemented.
-from tracekit.rules.attributeerror.rules import AttributeErrorNoneTypeRule
+# Deliberately importing classes that do not exist yet — ATTR002's
+# import failing IS the expected state until it's implemented.
+from tracekit.rules.attributeerror.rules import (
+    AttributeErrorContainerConfusionRule,
+    AttributeErrorNoneTypeRule,
+)
 
 
 def _make_attr_ctx(trigger) -> ExceptionContext:
@@ -173,6 +176,147 @@ def test_registry_isolates_a_crashing_attributeerror_rule():
     def trigger():
         user = None
         return user.name
+
+    ctx = _make_attr_ctx(trigger)
+
+    with pytest.warns(RuntimeWarning):
+        results = registry.evaluate(ctx)
+
+    assert results == []
+
+
+# ---------------------------------------------------------------------
+# ATTR002: built-in container API confusion — written before the rule
+# exists, per benchmark/README.md's ATTR002 scope boundary. Supported:
+# str.append(), list.add(), dict.append(), set.append(). Explicitly
+# NOT supported: user-defined classes, third-party APIs, attribute
+# typos (ATTR003's job), NoneType access (ATTR001's job). Any test
+# below asserting `is None` is enforcing that boundary, not just
+# checking an edge case.
+# ---------------------------------------------------------------------
+
+def test_attr002_fires_on_str_append():
+    def trigger():
+        return "hello".append("!")
+
+    ctx = _make_attr_ctx(trigger)
+    result = AttributeErrorContainerConfusionRule().matches(ctx)
+    assert result is not None
+    assert "list" in result.explanation.lower()
+
+
+def test_attr002_fires_on_list_add():
+    def trigger():
+        return [].add(1)
+
+    ctx = _make_attr_ctx(trigger)
+    result = AttributeErrorContainerConfusionRule().matches(ctx)
+    assert result is not None
+    assert "set" in result.explanation.lower()
+
+
+def test_attr002_fires_on_dict_append():
+    def trigger():
+        return {}.append(1)
+
+    ctx = _make_attr_ctx(trigger)
+    result = AttributeErrorContainerConfusionRule().matches(ctx)
+    assert result is not None
+    assert "list" in result.explanation.lower()
+
+
+def test_attr002_fires_on_set_append():
+    def trigger():
+        return set().append(1)
+
+    ctx = _make_attr_ctx(trigger)
+    result = AttributeErrorContainerConfusionRule().matches(ctx)
+    assert result is not None
+    assert "list" in result.explanation.lower()
+
+
+def test_attr002_does_not_fire_on_none():
+    """None.append() is ATTR001's territory, not ATTR002's — this is
+    the exact cross-family boundary check from the benchmark ground
+    truth (ATTR002-005)."""
+
+    def trigger():
+        return None.append()
+
+    ctx = _make_attr_ctx(trigger)
+    result = AttributeErrorContainerConfusionRule().matches(ctx)
+    assert result is None
+
+
+def test_attr002_does_not_fire_on_user_defined_class():
+    """A user-defined class is explicitly out of scope for ATTR002 —
+    only the four built-in container types are supported."""
+
+    class Foo:
+        pass
+
+    def trigger():
+        return Foo().bar()
+
+    ctx = _make_attr_ctx(trigger)
+    result = AttributeErrorContainerConfusionRule().matches(ctx)
+    assert result is None
+
+
+def test_attr002_does_not_fire_on_unrecognized_method_name():
+    """A missing attribute that isn't one of the specific tracked
+    confusion pairs must not fire — ATTR002 is a fixed, curated lookup,
+    not a general 'guess what method they meant' rule."""
+
+    def trigger():
+        return [].some_totally_unrelated_method()
+
+    ctx = _make_attr_ctx(trigger)
+    result = AttributeErrorContainerConfusionRule().matches(ctx)
+    assert result is None
+
+
+def test_attr002_confidence_matches_specification():
+    """Locking in the target confidence (0.95) — deterministic like
+    ATTR001, but a fixed lookup table rather than a direct structural
+    fact, so pitched slightly below ATTR001's 0.98."""
+
+    def trigger():
+        return "hello".append("!")
+
+    ctx = _make_attr_ctx(trigger)
+    result = AttributeErrorContainerConfusionRule().matches(ctx)
+    assert result.confidence == 0.95
+
+
+def test_attr002_evidence_contains_object_type_and_missing_method():
+    def trigger():
+        return "hello".append("!")
+
+    ctx = _make_attr_ctx(trigger)
+    result = AttributeErrorContainerConfusionRule().matches(ctx)
+    evidence_text = " ".join(result.evidence)
+    assert "str" in evidence_text
+    assert "append" in evidence_text
+
+
+def test_registry_isolates_a_crashing_attr002_rule():
+    """Same crash-isolation guarantee, exercised against ATTR002's own
+    class specifically rather than assuming ATTR001's check covers it."""
+
+    class ExplodingAttr002Rule:
+        RULE_ID = "ATTR002_BOOM"
+        exception_types = (AttributeError,)
+        priority = 0
+
+        def matches(self, ctx):
+            raise RuntimeError("broken on purpose")
+
+    registry = RuleRegistry()
+    registry.register(ExplodingAttr002Rule())
+
+    def trigger():
+        return "hello".append("!")
 
     ctx = _make_attr_ctx(trigger)
 
