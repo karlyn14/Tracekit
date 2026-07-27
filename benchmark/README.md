@@ -35,9 +35,8 @@ Fields, one JSON object per line:
 ### Current state
 
 **KeyError** (`keyerror_cases.jsonl`): 84 cases (52 train / 32 test).
-**AttributeError** (`attributeerror_cases.jsonl`): 6 cases (4 train /
-2 test) — small by design, since ATTR001 is a narrow, deterministic
-rule; will grow alongside ATTR002/ATTR003 as they're implemented.
+**AttributeError** (`attributeerror_cases.jsonl`): 12 cases (7 train /
+5 test).
 
 KeyError categories: `typo`, `case_mismatch`, `ambiguous` (deliberate
 ties — should abstain), `similar_but_different` (adversarial —
@@ -48,8 +47,40 @@ other), `non_typo_missing`, `missing_config`, `nested_dict_assigned`,
 
 AttributeError categories: `none_attribute`, `none_via_function_return`,
 `genuine_missing_attribute` (true negative for ATTR001),
-`future_attr002_wrong_method`, `future_attr003_typo` (ground truth for
-unimplemented rules).
+`attr002_container_api_confusion` (ground truth for ATTR002, not yet
+implemented), `attr001_regression_check_literal_none` (cross-checks
+that ATTR002's container-confusion detection doesn't steal cases that
+belong to ATTR001), `genuine_missing_attribute_not_container` (true
+negative for ATTR002), `future_attr003_typo` (ground truth for
+ATTR003, not yet implemented).
+
+### ATTR002 scope boundary (written before implementation, on purpose)
+
+ATTR002 detects a narrow, specific pattern: **calling a method that
+doesn't exist on a value because two built-in container APIs were
+confused** (e.g. `.append()` — a list method — called on a `str`,
+`dict`, or `set`). This boundary is deliberate, not an oversight, and
+is fixed here *before* any implementation exists so scope creep has
+something concrete to be checked against later:
+
+```text
+Supported:
+  ✓ str.append()   (list method called on a str)
+  ✓ list.add()      (set method called on a list)
+  ✓ dict.append()   (list method called on a dict)
+  ✓ set.append()    (list method called on a set)
+
+Not supported (out of scope for ATTR002, on purpose):
+  ✗ arbitrary user-defined classes        (not a built-in container)
+  ✗ third-party library APIs              (pandas, requests, etc.)
+  ✗ attribute-name typos                  (ATTR003's job, not ATTR002's)
+  ✗ NoneType access                       (ATTR001's job, not ATTR002's)
+```
+
+If ATTR002 starts firing on any of the "not supported" cases, that's a
+false positive against this stated boundary, not a missing feature to
+add — the fix is narrowing the rule back to its scope, not widening
+it into a general "explain every AttributeError" rule.
 
 ### Known, accepted limitation: edit-distance false positives
 

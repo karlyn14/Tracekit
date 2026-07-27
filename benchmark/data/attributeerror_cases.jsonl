@@ -4,3 +4,9 @@
 {"id": "ATTR001-004", "source": "handwritten", "split": "train", "category": "genuine_missing_attribute", "expected_rule_id": null, "code": "def f():\n    class Foo:\n        pass\n    obj = Foo()\n    return obj.some_unrelated_attribute\nf()"}
 {"id": "ATTR001-005", "source": "handwritten", "split": "train", "category": "future_attr002_wrong_method", "expected_rule_id": "ATTR002", "code": "def f():\n    text = 'hello'\n    return text.append('!')\nf()"}
 {"id": "ATTR001-006", "source": "handwritten", "split": "test", "category": "future_attr003_typo", "expected_rule_id": "ATTR003", "code": "def f():\n    class User:\n        def __init__(self):\n            self.name = 'Ada'\n    u = User()\n    return u.nmae\nf()"}
+{"id": "ATTR002-001", "source": "handwritten", "split": "train", "category": "attr002_container_api_confusion", "expected_rule_id": "ATTR002", "code": "def f():\n    return 'hello'.append('!')\nf()"}
+{"id": "ATTR002-002", "source": "stackoverflow", "split": "train", "category": "attr002_container_api_confusion", "expected_rule_id": "ATTR002", "code": "def f():\n    return [].add(1)\nf()"}
+{"id": "ATTR002-003", "source": "github_issue", "split": "test", "category": "attr002_container_api_confusion", "expected_rule_id": "ATTR002", "code": "def f():\n    return {}.append(1)\nf()"}
+{"id": "ATTR002-004", "source": "handwritten", "split": "test", "category": "attr002_container_api_confusion", "expected_rule_id": "ATTR002", "code": "def f():\n    return set().append(1)\nf()"}
+{"id": "ATTR002-005", "source": "handwritten", "split": "train", "category": "attr001_regression_check_literal_none", "expected_rule_id": "ATTR001", "code": "def f():\n    return None.append()\nf()"}
+{"id": "ATTR002-007", "source": "stackoverflow", "split": "test", "category": "genuine_missing_attribute_not_container", "expected_rule_id": null, "code": "def f():\n    class Foo:\n        pass\n    return Foo().bar()\nf()"}
