@@ -191,12 +191,23 @@ work:
   not a regression, but the dataset doing exactly what it was
   expanded to do.
 
+## Releases
+
+**v1.0.0** — Feature-complete implementation: pipeline, KEY001-003,
+84-case benchmark, CI, ADRs, 22 tests at 92% coverage.
+
+**v1.0.1** — Demo script, HTML coverage report, strengthened benchmark
+scope disclaimer. Documentation and presentation only — no functional
+changes to rules, pipeline, or benchmark logic.
+
 ## Architecture Decision Records
 
 Key design decisions, with rationale and consequences, in `docs/adr/`:
 - [0001 — Rule Registry: compiled classes, not declarative YAML](docs/adr/0001-rule-registry.md)
 - [0002 — Confidence Model: heuristic scores, ambiguity as abstention](docs/adr/0002-confidence-model.md)
 - [0003 — Benchmark Methodology: train/test split, ground truth ahead of implementation](docs/adr/0003-benchmark-methodology.md)
+
+Prepared answers to the core viva questions: [docs/viva_prep.md](docs/viva_prep.md)
 
 ## Future work
 
