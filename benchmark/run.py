@@ -301,7 +301,16 @@ def main() -> None:
     import io
     import sys
 
-    version = "v1.0.0"
+    # IMPORTANT: this writes to "latest", not to a version-tagged file.
+    # Overwriting benchmark_v1.0.0.* every time someone runs the
+    # benchmark (e.g. via demo.py) would silently mutate what's
+    # supposed to be a frozen, citable release artifact — exactly the
+    # kind of quiet history-rewrite this project has otherwise been
+    # careful to avoid. To snapshot a real release, copy
+    # benchmark_latest.* to benchmark_vX.Y.Z.* by hand at release time
+    # and commit it deliberately (see docs/adr/0003 and the Releases
+    # section in README.md).
+    output_tag = "latest"
     buffer = io.StringIO()
     real_stdout = sys.stdout
     sys.stdout = _Tee(real_stdout, buffer)
@@ -324,7 +333,7 @@ def main() -> None:
             if c.expected_rule_id is not None and c.expected_rule_id not in known_ids
         ]
 
-        print(f"TraceKit Benchmark — {version}")
+        print(f"TraceKit Benchmark — run tag: {output_tag}")
         print(f"(Rules were designed against {len(train_cases)} train-split cases; "
               f"metrics below are computed ONLY on the {len(test_cases)} held-out "
               f"test-split cases, never seen during rule design.)\n")
@@ -338,11 +347,13 @@ def main() -> None:
         sys.stdout = real_stdout
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    (RESULTS_DIR / f"benchmark_{version}.txt").write_text(buffer.getvalue())
-    (RESULTS_DIR / f"benchmark_{version}.json").write_text(
+    (RESULTS_DIR / f"benchmark_{output_tag}.txt").write_text(buffer.getvalue())
+    (RESULTS_DIR / f"benchmark_{output_tag}.json").write_text(
         json.dumps(_json_safe_stats(stats), indent=2)
     )
-    print(f"\nSaved: benchmark/results/benchmark_{version}.txt and .json")
+    print(f"\nSaved: benchmark/results/benchmark_{output_tag}.txt and .json")
+    print("(To create a citable, frozen release snapshot, copy these to")
+    print(" benchmark_vX.Y.Z.* by hand and commit them deliberately.)")
 
 
 if __name__ == "__main__":
