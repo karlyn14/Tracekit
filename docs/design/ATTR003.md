@@ -40,25 +40,25 @@ The stated requirement is that `[].add()` must be diagnosed by ATTR002
 ("did you mean `.append()`, a list has no `.add()`"), never by ATTR003
 ("did you mean... `.append()`? edit-distance-based guess").
 
-**Decision: do not make ATTR003 aware of ATTR002.** The core
-architecture principle (see main README pipeline diagram) is that
-rules never talk to each other — each is evaluated independently and
-ranked purely by confidence, then priority, then registration order.
-Adding an explicit "don't run if ATTR002 already matched" check would
-break that decoupling for one special case, and every future rule pair
-would need the same kind of special-casing.
+**Decision: do not make ATTR003 aware of ATTR002.** This follows
+directly from the **Rule Independence Invariant** (ADR 0004, formalized
+during this design pass): rules must never inspect or depend on each
+other's outputs; conflicts resolve solely through the registry's
+confidence-based ranking. Adding an explicit "don't run if ATTR002
+already matched" check would violate that invariant for one special
+case, and set a precedent every future rule pair would need to repeat.
 
-Instead, this is enforced structurally, by construction:
-- ATTR002's confidence floor is 0.95 (fixed, deterministic lookup).
-- ATTR003's confidence ceiling is 0.88 (heuristic, distance 1 — see
-  table below), always strictly below ATTR002's floor.
+Enforced structurally instead, per ADR 0004's confidence tiers:
+- ATTR002 sits in the **deterministic lookup** tier (0.93-0.97),
+  confidence 0.95.
+- ATTR003 sits in the **strong heuristic** tier (0.80-0.90), ceiling
+  0.88.
 
 Whenever both rules happen to fire on the same case, the registry's
 existing confidence-based ranking guarantees ATTR002 wins the top
-rank without either rule knowing the other exists. If a future
-confidence value ever needs to change, this invariant (ATTR002's floor
-> ATTR003's ceiling) is the thing to check before merging — noted here
-explicitly so it isn't lost.
+rank without either rule knowing the other exists. The invariant to
+preserve if either rule's confidence is ever retuned: ATTR002's floor
+must stay strictly above ATTR003's ceiling.
 
 In practice this rarely even needs to be tested: `_CONTAINER_CONFUSIONS`
 entries (`add`, `append` on the wrong container) and genuine typos
@@ -81,6 +81,8 @@ positives are more expensive than a missed diagnosis (same principle
 established for KEY001 and reaffirmed for every rule since).
 
 ## Confidence mapping
+
+Falls within ADR 0004's **strong heuristic** tier (0.80-0.90):
 
 | Situation | Confidence |
 |---|---:|

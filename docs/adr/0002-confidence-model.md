@@ -43,3 +43,15 @@ candidate really is right about 80% of the time.
   ~0.4–0.65), since there is no equivalent ambiguity risk once they
   match — this is reflected in, and supported by, the measured
   per-rule benchmark results.
+
+## Update (formalized in ADR 0004)
+
+The pattern described above — deterministic rules sitting well above
+heuristic ones — was formalized into explicit, non-overlapping
+confidence tiers once a second exception family (AttributeError) made
+it clear this wasn't a KeyError-specific pattern: **structural fact**
+(0.98-1.00), **deterministic lookup** (0.93-0.97), **strong heuristic**
+(0.80-0.90), **weak heuristic** (<0.80). See ADR 0004 for the full
+table and why keeping tiers non-overlapping is what lets rule conflicts
+resolve through confidence ranking alone, with no coupling between
+rules required.

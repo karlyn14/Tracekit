@@ -234,6 +234,7 @@ Key design decisions, with rationale and consequences, in `docs/adr/`:
 - [0001 — Rule Registry: compiled classes, not declarative YAML](docs/adr/0001-rule-registry.md)
 - [0002 — Confidence Model: heuristic scores, ambiguity as abstention](docs/adr/0002-confidence-model.md)
 - [0003 — Benchmark Methodology: train/test split, ground truth ahead of implementation](docs/adr/0003-benchmark-methodology.md)
+- [0004 — Rule Independence Invariant: rules never inspect each other, conflicts resolve via confidence ranking](docs/adr/0004-rule-independence-invariant.md)
 
 Prepared answers to the core viva questions: [docs/viva_prep.md](docs/viva_prep.md)
 
