@@ -2,8 +2,11 @@
 Rules for AttributeError.
 
 Rule inventory (in progress — see benchmark/data/attributeerror_cases.jsonl
-for ground truth defined ahead of implementation for ATTR002/ATTR003):
+for ground truth defined ahead of implementation for ATTR003):
     ATTR001 - attribute/method accessed on a None value (deterministic)
+    ATTR002 - built-in container API confusion (deterministic lookup;
+               see benchmark/README.md "ATTR002 scope boundary" for
+               exactly what's in/out of scope)
 """
 
 from __future__ import annotations
@@ -80,3 +83,81 @@ class AttributeErrorNoneTypeRule(Rule):
 
 
 _MISSING = object()
+
+
+# (wrong_type_name, missing_method_name) -> suggested_type_name
+#
+# A fixed, curated lookup table, not an if/elif chain — deliberately
+# so that supporting a new confusion pair later (e.g. tuple.add) is a
+# single new entry, not a code change to the matching logic. This is
+# the exact scope boundary from benchmark/README.md "ATTR002 scope
+# boundary": only these four built-in container types, only these
+# specific confusion pairs. Anything not in this table falls through
+# to `return None` — ATTR002 does not guess at arbitrary AttributeErrors.
+_CONTAINER_CONFUSIONS: dict[tuple[str, str], str] = {
+    ("str", "append"): "list",
+    ("list", "add"): "set",
+    ("dict", "append"): "list",
+    ("set", "append"): "list",
+}
+
+
+class AttributeErrorContainerConfusionRule(Rule):
+    """
+    ATTR002: a method was called that doesn't exist on this built-in
+    container type because it belongs to a different one (e.g.
+    `.append()` — a list method — called on a str, dict, or set).
+
+    Deliberately narrow, via a fixed lookup table
+    (`_CONTAINER_CONFUSIONS`) rather than a general "any AttributeError
+    on any container-like object" rule. Scope is fixed in
+    benchmark/README.md before this class existed:
+        Supported:     str.append, list.add, dict.append, set.append
+        Not supported:  user-defined classes, third-party APIs,
+                        attribute typos (ATTR003), NoneType access
+                        (ATTR001)
+    Any AttributeError not matching an exact entry in the table simply
+    isn't claimed by this rule — that's the boundary working as
+    intended, not a gap to patch by adding more guessing.
+
+    Confidence is 0.95 — deterministic like ATTR001, but pitched
+    slightly below its 0.98 because this rule's certainty rests on a
+    fixed, curated table matching known confusion pairs, rather than
+    a direct structural fact like "this object literally is None".
+    """
+
+    RULE_ID = "ATTR002"
+    exception_types = (AttributeError,)
+    priority = 10  # same deterministic tier as ATTR001/KEY002/KEY003
+
+    def matches(self, ctx: ExceptionContext) -> Optional[MatchResult]:
+        exc = ctx.exc_value
+        obj = getattr(exc, "obj", _MISSING)
+        attr_name = getattr(exc, "name", None)
+
+        if obj is _MISSING or attr_name is None:
+            return None
+
+        if obj is None:
+            return None  # ATTR001's territory, not ATTR002's
+
+        obj_type_name = type(obj).__name__
+        suggested_type = _CONTAINER_CONFUSIONS.get((obj_type_name, attr_name))
+
+        if suggested_type is None:
+            return None  # not a recognized confusion pair — out of scope
+
+        return MatchResult(
+            confidence=0.95,
+            explanation=(
+                f"'{attr_name}' is not a method of {obj_type_name} — "
+                f"did you mean to use a {suggested_type}?"
+            ),
+            evidence=[
+                "Exception type: AttributeError",
+                f"Object type: {obj_type_name}",
+                f"Missing method: {attr_name!r}",
+                f"{attr_name!r} exists on: {suggested_type}",
+            ],
+            fix=f"Check whether you intended a {suggested_type} instead of a {obj_type_name}.",
+        )
