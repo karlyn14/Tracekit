@@ -100,6 +100,16 @@ conservative confidence reflects that.
 
 ## Scope boundary
 
+**ATTR003 does not attempt semantic correction.** It only suggests
+attributes that already exist on the inspected object, found by
+lexical similarity to the missing name. It will never invent new
+attribute names or infer an intended API. `database.connectoin` →
+"did you mean `connection`?" is in scope (the correct name already
+exists on the object). `database.open()` → "maybe you meant
+`connect()`?" is explicitly out of scope — that's API recommendation
+based on assumed intent, not typo detection, and belongs in a
+different rule (or arguably not in TraceKit at all).
+
 ```text
 Supported:
   ✓ missing attribute/method name is within edit distance 2 of
@@ -115,6 +125,9 @@ Not supported (out of scope for ATTR003, on purpose):
   ✗ attributes that don't exist anywhere close (genuine missing
     functionality, not a typo) — no candidate within distance 2 means
     no diagnosis
+  ✗ semantic/API correction of any kind — suggesting a DIFFERENT but
+    conceptually related method/attribute that isn't lexically close
+    (e.g. .open() -> .connect()) is never in scope for this rule
 ```
 
 ## What happens next
