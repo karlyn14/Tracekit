@@ -35,8 +35,8 @@ Fields, one JSON object per line:
 ### Current state
 
 **KeyError** (`keyerror_cases.jsonl`): 84 cases (52 train / 32 test).
-**AttributeError** (`attributeerror_cases.jsonl`): 12 cases (7 train /
-5 test).
+**AttributeError** (`attributeerror_cases.jsonl`): 16 cases (9 train /
+7 test).
 
 KeyError categories: `typo`, `case_mismatch`, `ambiguous` (deliberate
 ties — should abstain), `similar_but_different` (adversarial —
@@ -47,12 +47,15 @@ other), `non_typo_missing`, `missing_config`, `nested_dict_assigned`,
 
 AttributeError categories: `none_attribute`, `none_via_function_return`,
 `genuine_missing_attribute` (true negative for ATTR001),
-`attr002_container_api_confusion` (ground truth for ATTR002, not yet
-implemented), `attr001_regression_check_literal_none` (cross-checks
-that ATTR002's container-confusion detection doesn't steal cases that
-belong to ATTR001), `genuine_missing_attribute_not_container` (true
-negative for ATTR002), `future_attr003_typo` (ground truth for
-ATTR003, not yet implemented).
+`attr002_container_api_confusion` (ground truth for ATTR002),
+`attr001_regression_check_literal_none` (cross-checks that ATTR002's
+container-confusion detection doesn't steal cases that belong to
+ATTR001), `genuine_missing_attribute_not_container` (true negative for
+ATTR002), `attr003_typo_distance1`/`future_attr003_typo` (ground truth
+for ATTR003 — not yet implemented), `attr003_ambiguous` (tie between
+two equally-close real attributes — true negative, same abstention
+principle as KEY001), `attr003_no_close_candidate` (genuinely no
+attribute within edit distance 2 — true negative).
 
 ### ATTR002 scope boundary (written before implementation, on purpose)
 
