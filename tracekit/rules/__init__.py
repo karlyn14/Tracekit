@@ -14,6 +14,7 @@ from tracekit.rules.keyerror.rules import (
 from tracekit.rules.attributeerror.rules import (
     AttributeErrorContainerConfusionRule,
     AttributeErrorNoneTypeRule,
+    AttributeErrorTypoRule,
 )
 
 default_registry.register(KeyErrorTypoRule())
@@ -21,3 +22,4 @@ default_registry.register(KeyErrorCaseMismatchRule())
 default_registry.register(KeyErrorNestedSectionRule())
 default_registry.register(AttributeErrorNoneTypeRule())
 default_registry.register(AttributeErrorContainerConfusionRule())
+default_registry.register(AttributeErrorTypoRule())
