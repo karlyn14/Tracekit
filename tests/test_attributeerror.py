@@ -29,11 +29,12 @@ from tracekit.core.registry import RuleRegistry
 from tracekit.output.formatter import format_result
 from tracekit.core.analyzer import AnalysisResult, Candidate
 
-# Deliberately importing classes that do not exist yet — ATTR002's
+# Deliberately importing classes that do not exist yet — ATTR003's
 # import failing IS the expected state until it's implemented.
 from tracekit.rules.attributeerror.rules import (
     AttributeErrorContainerConfusionRule,
     AttributeErrorNoneTypeRule,
+    AttributeErrorTypoRule,
 )
 
 
@@ -317,6 +318,172 @@ def test_registry_isolates_a_crashing_attr002_rule():
 
     def trigger():
         return "hello".append("!")
+
+    ctx = _make_attr_ctx(trigger)
+
+    with pytest.warns(RuntimeWarning):
+        results = registry.evaluate(ctx)
+
+    assert results == []
+
+
+# ---------------------------------------------------------------------
+# ATTR003: attribute typo detection — written against the frozen
+# design contract in docs/design/ATTR003.md, before the rule exists.
+# Candidate set: filtered dir(obj) (public, non-dunder). Threshold:
+# edit distance <= 2. Ambiguity: abstain on ties (same principle as
+# KEY001). Confidence: 0.88 at distance 1, 0.80 at distance 2 (ADR
+# 0004's "strong heuristic" tier). Must never attempt semantic
+# correction — only lexically close, real attributes on the object.
+# ---------------------------------------------------------------------
+
+def test_attr003_fires_on_method_typo_distance1():
+    def trigger():
+        items = []
+        return items.apend(1)
+
+    ctx = _make_attr_ctx(trigger)
+    result = AttributeErrorTypoRule().matches(ctx)
+    assert result is not None
+    assert "append" in result.explanation
+
+
+def test_attr003_fires_on_property_typo_distance1():
+    def trigger():
+        class Config:
+            def __init__(self):
+                self.setting = True
+        return Config().seting
+
+    ctx = _make_attr_ctx(trigger)
+    result = AttributeErrorTypoRule().matches(ctx)
+    assert result is not None
+    assert "setting" in result.explanation
+
+
+def test_attr003_fires_on_attribute_typo_distance2():
+    def trigger():
+        class User:
+            def __init__(self):
+                self.name = "Ada"
+        return User().nmae
+
+    ctx = _make_attr_ctx(trigger)
+    result = AttributeErrorTypoRule().matches(ctx)
+    assert result is not None
+    assert "name" in result.explanation
+    assert result.confidence == 0.80
+
+
+def test_attr003_abstains_on_ambiguous_tie():
+    """THE most important test in this file, per design review: if
+    two real attributes are equally close to the missing name, the
+    rule MUST stay silent. A confident wrong guess here is exactly the
+    failure mode the whole ambiguity-abstention principle exists to
+    prevent (same as KEY001's 'it' vs 'id'/'ip')."""
+
+    def trigger():
+        class Obj:
+            def __init__(self):
+                self.id = 1
+                self.ip = "1.2.3.4"
+        return Obj().it
+
+    ctx = _make_attr_ctx(trigger)
+    result = AttributeErrorTypoRule().matches(ctx)
+    assert result is None
+
+
+def test_attr003_does_not_fire_when_no_close_candidate():
+    def trigger():
+        class Server:
+            def __init__(self):
+                self.host = "x"
+                self.port = 80
+        return Server().color
+
+    ctx = _make_attr_ctx(trigger)
+    result = AttributeErrorTypoRule().matches(ctx)
+    assert result is None
+
+
+def test_attr003_does_not_fire_on_none():
+    """None access is ATTR001's territory — enforced here by ATTR003
+    itself declining to consider a None object at all, not by
+    inspecting ATTR001 (Rule Independence Invariant, ADR 0004)."""
+
+    def trigger():
+        user = None
+        return user.name
+
+    ctx = _make_attr_ctx(trigger)
+    result = AttributeErrorTypoRule().matches(ctx)
+    assert result is None
+
+
+def test_attr003_does_not_fire_on_container_confusion_case():
+    """[].add(1) is ATTR002's territory. Verified here as an actual
+    behavioral outcome (minimum real edit distance from 'add' to any
+    list method is 3, above ATTR003's threshold of 2) — not asserted
+    via rule coupling, per ADR 0004."""
+
+    def trigger():
+        return [].add(1)
+
+    ctx = _make_attr_ctx(trigger)
+    result = AttributeErrorTypoRule().matches(ctx)
+    assert result is None
+
+
+def test_attr003_confidence_tiers_match_specification():
+    def trigger_distance1():
+        items = []
+        return items.apend(1)
+
+    def trigger_distance2():
+        class User:
+            def __init__(self):
+                self.name = "Ada"
+        return User().nmae
+
+    ctx1 = _make_attr_ctx(trigger_distance1)
+    ctx2 = _make_attr_ctx(trigger_distance2)
+
+    result1 = AttributeErrorTypoRule().matches(ctx1)
+    result2 = AttributeErrorTypoRule().matches(ctx2)
+
+    assert result1.confidence == 0.88
+    assert result2.confidence == 0.80
+
+
+def test_attr003_evidence_contains_type_and_candidate():
+    def trigger():
+        items = []
+        return items.apend(1)
+
+    ctx = _make_attr_ctx(trigger)
+    result = AttributeErrorTypoRule().matches(ctx)
+    evidence_text = " ".join(result.evidence)
+    assert "list" in evidence_text
+    assert "apend" in evidence_text
+    assert "append" in evidence_text
+
+
+def test_registry_isolates_a_crashing_attr003_rule():
+    class ExplodingAttr003Rule:
+        RULE_ID = "ATTR003_BOOM"
+        exception_types = (AttributeError,)
+        priority = 0
+
+        def matches(self, ctx):
+            raise RuntimeError("broken on purpose")
+
+    registry = RuleRegistry()
+    registry.register(ExplodingAttr003Rule())
+
+    def trigger():
+        items = []
+        return items.apend(1)
 
     ctx = _make_attr_ctx(trigger)
 
