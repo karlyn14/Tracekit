@@ -1,0 +1,57 @@
+{
+  "n_cases": 39,
+  "total_positive": 21,
+  "total_negative": 18,
+  "matched": 25,
+  "abstained": 14,
+  "abstention_rate": 0.358974358974359,
+  "precision_at_1": 1.0,
+  "precision_at_k": 1.0,
+  "coverage": 1.0,
+  "false_positive_rate": 0.2222222222222222,
+  "avg_time_ms": 0.21009282051318806,
+  "rule_stats": {
+    "ATTR001": {
+      "fired": 1,
+      "correct": 1,
+      "false_positive": 0,
+      "missed": 0,
+      "avg_confidence": 0.98
+    },
+    "ATTR003": {
+      "fired": 2,
+      "correct": 2,
+      "false_positive": 0,
+      "missed": 0,
+      "avg_confidence": 0.8400000000000001
+    },
+    "ATTR002": {
+      "fired": 2,
+      "correct": 2,
+      "false_positive": 0,
+      "missed": 0,
+      "avg_confidence": 0.95
+    },
+    "KEY001": {
+      "fired": 16,
+      "correct": 10,
+      "false_positive": 4,
+      "missed": 0,
+      "avg_confidence": 0.571875
+    },
+    "KEY002": {
+      "fired": 4,
+      "correct": 4,
+      "false_positive": 0,
+      "missed": 0,
+      "avg_confidence": 0.95
+    },
+    "KEY003": {
+      "fired": 2,
+      "correct": 2,
+      "false_positive": 0,
+      "missed": 0,
+      "avg_confidence": 0.9
+    }
+  }
+}

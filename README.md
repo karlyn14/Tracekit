@@ -238,12 +238,45 @@ work:
 
 ## Releases
 
+**v2.0.0** — Two exception families closed. KeyError (KEY001-003) and
+AttributeError (ATTR001-003), 6 accepted rules across 6 distinct
+diagnostic strategies, 51 tests at 92% coverage, benchmark's
+"ground-truth rules... not yet implemented" section empty for the
+first time. Rule Independence Invariant and confidence tiers
+formalized (ADR 0004). Retrospective completed
+(`docs/RETROSPECTIVE_v2.md`) before starting the next family.
+
+**v1.0.2** — Viva prep docs, releases section, benchmark artifact
+overwrite fix.
+
+**v1.0.1** — Demo script, HTML coverage report, strengthened benchmark
+scope disclaimer. Documentation and presentation only.
+
 **v1.0.0** — Feature-complete implementation: pipeline, KEY001-003,
 84-case benchmark, CI, ADRs, 22 tests at 92% coverage.
 
-**v1.0.1** — Demo script, HTML coverage report, strengthened benchmark
-scope disclaimer. Documentation and presentation only — no functional
-changes to rules, pipeline, or benchmark logic.
+## Project-level acceptance criterion (v3.0)
+
+Individual rules have always had an acceptance criterion (see
+`benchmark/README.md`). The project as a whole now has one too, set
+at the v2.0.0 milestone rather than left as an open-ended "add more
+rules":
+
+| Metric | v2.0.0 (current) | v3.0 target |
+|---|---:|---:|
+| Exception families closed | 2 | 3 |
+| Accepted rules | 6 | 9-10 |
+| Tests | 51 | grows with rules; suite runtime tracked, not just count (see Suite Health) |
+| Coverage | 92% | no reduction from 92% |
+| KEY001-family FP rate | ~25% (documented, accepted limitation) | no *increase* from current baseline |
+| Benchmark reproducibility | `benchmark_latest.*` vs versioned snapshots kept separate (see ADR 0003) | unchanged — still a hard requirement |
+
+v3.0 is not "whenever a third family has some rules in it" — it's
+specifically: a third exception family closed (all its planned rules
+accepted, its ground-truth report empty), with none of the above
+metrics regressing. If a third family's rules are accepted but
+coverage drops or the KEY001 false-positive rate climbs, that's not
+v3.0 yet — the criterion is a floor, not a suggestion.
 
 ## Architecture Decision Records
 

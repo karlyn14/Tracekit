@@ -70,3 +70,53 @@ benchmark outputs from mutable development artifacts, improving the
 reproducibility of experimental results.
 
 No functional changes to rules or pipeline.
+
+---
+
+## v2.0.0 — Two exception families closed
+
+**Highlights**
+- **AttributeError family closed** (3/3 planned rules): ATTR001
+  (runtime object inspection — `None` attribute access), ATTR002
+  (deterministic API-confusion lookup — e.g. `.append()` on a `str`),
+  ATTR003 (lexical typo heuristic — attribute/method name typos).
+- **KeyError family remains closed** (3/3): KEY001-003, unchanged
+  since v1.0.0 — zero regressions across the entire v1.0.0 → v2.0.0
+  span.
+- Benchmark's "ground-truth rules... not yet implemented" section is
+  **empty for the first time** — every rule ever committed to as
+  ground truth ahead of implementation has been built and accepted.
+- **ADR 0004**: formalized the Rule Independence Invariant (rules
+  never inspect each other's outputs; conflicts resolve solely via
+  confidence-tier ranking) and the project-wide confidence tiers
+  (structural fact / deterministic lookup / strong heuristic / weak
+  heuristic) that make that invariant enforceable without any rule
+  coupling.
+- `docs/design/ATTR003.md`: the project's first written design
+  contract, frozen before any benchmark case or implementation existed
+  — the first heuristic rule in a second family went from red tests
+  to accepted with zero iteration, directly attributable to this step.
+- `docs/RETROSPECTIVE_v2.md`: honest retrospective on what worked and
+  what cost time across both families, written specifically to inform
+  the next exception family rather than repeating discovery.
+- 51 tests (up from 22 at v1.0.0), 92% coverage maintained throughout.
+
+**Results (measured on the held-out test split — see README "Results"
+scope note before citing elsewhere)**
+
+| Rule | Strategy | Precision@1 | Coverage | FP Rate |
+|---|---|---:|---:|---:|
+| KEY001 | Fuzzy lexical similarity | 100% | 100% | ~25% |
+| KEY002 | Deterministic normalization | 100% | 100% | 0% |
+| KEY003 | Structural context analysis | 100% | 100% | 0% |
+| ATTR001 | Runtime object inspection | 100% | 100% | 0% |
+| ATTR002 | Deterministic API lookup | 100% | 100% | 0% |
+| ATTR003 | Lexical typo heuristic | 100% | 100% | 0% |
+
+**Project-level acceptance criterion for v3.0** is now stated
+explicitly in the README, not left open-ended: a third exception
+family closed (all planned rules accepted), 9-10 total accepted rules,
+no reduction in coverage from 92%, no increase in KEY001's false
+positive rate, benchmark reproducibility unchanged.
+
+No functional regressions on any KeyError rule.

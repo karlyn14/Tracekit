@@ -1,0 +1,76 @@
+TraceKit Benchmark — run tag: latest
+(Rules were designed against 61 train-split cases; metrics below are computed ONLY on the 39 held-out test-split cases, never seen during rule design.)
+
+=== TraceKit Benchmark — split: test ===
+Cases: 39 (21 positive, 18 negative)
+Matched:             25
+Abstained:           14
+Abstention rate:     35.9%
+Precision@1:         100%
+Precision@3:         100%
+Coverage:            100%
+False positive rate: 22%
+Avg analysis time:   0.21 ms
+
+Confidence calibration (bucket -> observed accuracy, n):
+  [0.4-0.5): accuracy=60%  n=5
+  [0.6-0.7): accuracy=64%  n=11
+  [0.8-0.9): accuracy=100%  n=2  (low N, indicative only)
+  [0.9-1.0): accuracy=100%  n=9
+
+Rule statistics
+  ATTR001
+    Fired:            1
+    Correct:          1
+    False positives:  0
+    Missed:           0  (expected to fire, didn't)
+    Avg confidence:   0.98
+    Avg exec time:    0.002 ms
+    P95 exec time:    0.008 ms
+  ATTR002
+    Fired:            2
+    Correct:          2
+    False positives:  0
+    Missed:           0  (expected to fire, didn't)
+    Avg confidence:   0.95
+    Avg exec time:    0.003 ms
+    P95 exec time:    0.006 ms
+  ATTR003
+    Fired:            2
+    Correct:          2
+    False positives:  0
+    Missed:           0  (expected to fire, didn't)
+    Avg confidence:   0.84
+    Avg exec time:    0.086 ms
+    P95 exec time:    0.344 ms
+  KEY001
+    Fired:            16
+    Correct:          10
+    False positives:  4
+    Missed:           0  (expected to fire, didn't)
+    Avg confidence:   0.57
+    Avg exec time:    0.038 ms
+    P95 exec time:    0.099 ms
+  KEY002
+    Fired:            4
+    Correct:          4
+    False positives:  0
+    Missed:           0  (expected to fire, didn't)
+    Avg confidence:   0.95
+    Avg exec time:    0.003 ms
+    P95 exec time:    0.005 ms
+  KEY003
+    Fired:            2
+    Correct:          2
+    False positives:  0
+    Missed:           0  (expected to fire, didn't)
+    Avg confidence:   0.90
+    Avg exec time:    0.001 ms
+    P95 exec time:    0.005 ms
+
+False positives (expected NO rule to fire, but one did):
+  KEY001-043 [handwritten]: got ['KEY001']
+  KEY001-070 [handwritten]: got ['KEY001']
+  KEY001-074 [github_issue]: got ['KEY001']
+  KEY003-006 [handwritten]: got ['KEY001']
+
