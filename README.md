@@ -1,7 +1,7 @@
 # TraceKit
 
 ![CI](https://img.shields.io/badge/CI-GitHub%20Actions-blue)
-![Tests](https://img.shields.io/badge/tests-31%20passed-brightgreen)
+![Tests](https://img.shields.io/badge/tests-51%20passed-brightgreen)
 ![Coverage](https://img.shields.io/badge/coverage-92%25-brightgreen)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 
@@ -81,9 +81,9 @@ be added later without a rewrite.
 Each new rule is chosen to demonstrate a genuinely different
 diagnostic *strategy*, not just to cover another exception type. The
 architecture's real claim is that it generalizes across exception
-families without redesign — ATTR001 is the first proof of that,
-added with zero changes to the core pipeline (`context.py`,
-`registry.py`, `analyzer.py`, `formatter.py`).
+families without redesign — the AttributeError family (below) is the
+proof: all three rules added with zero changes to the core pipeline
+(`context.py`, `registry.py`, `analyzer.py`, `formatter.py`).
 
 | Family | Rule | Strategy | What it catches |
 |---|---|---|---|
@@ -91,16 +91,15 @@ added with zero changes to the core pipeline (`context.py`,
 | KeyError | KEY002 | Deterministic normalization | Key exists with different letter casing |
 | KeyError | KEY003 | Structural context analysis | Key exists one level deeper in a nested dict |
 | AttributeError | ATTR001 | Runtime object inspection | Attribute/method accessed on a `None` value |
+| AttributeError | ATTR002 | Deterministic API lookup | Built-in container method confusion (e.g. `.append()` on a `str`) |
+| AttributeError | ATTR003 | Lexical typo heuristic | Attribute/method name is a likely typo of a real one on the object |
 
-Ground truth defined ahead of implementation (see `benchmark/README.md`
-"Ground-truth rules" report), reserved for future strategies within
-the AttributeError family specifically so it also spans multiple
-reasoning techniques, not just rule count:
-
-| Rule | Planned strategy |
-|---|---|
-| ATTR002 | API misuse (wrong method for the object's type, e.g. `.append()` on a `str`) |
-| ATTR003 | Attribute-name typo detection (same lexical approach as KEY001, applied to a new family) |
+**AttributeError is closed at 3/3 planned rules** — every rule this
+benchmark ever committed to ahead of implementation has been built and
+accepted (see `benchmark/README.md`; the "ground-truth rules... not
+yet implemented" report section is empty for the first time). Further
+AttributeError rules would need a new benchmark case and an explicit
+roadmap decision, not just "since we're here."
 
 ## Benchmark methodology
 
@@ -138,19 +137,29 @@ what's in the dataset and its known composition/size limitations.
 
 | Rule   | Strategy                     | Precision@1 | Coverage | FP Rate | Avg Confidence | Avg Exec Time |
 |--------|-------------------------------|------------:|---------:|--------:|---------------:|--------------:|
-| KEY001 | Fuzzy lexical similarity       | 100%        | 100%     | ~25%    | 0.57           | 0.025 ms      |
-| KEY002 | Deterministic normalization     | 100%        | 100%     | 0%      | 0.95           | 0.002 ms      |
+| KEY001 | Fuzzy lexical similarity       | 100%        | 100%     | ~25%    | 0.57           | 0.036 ms      |
+| KEY002 | Deterministic normalization     | 100%        | 100%     | 0%      | 0.95           | 0.003 ms      |
 | KEY003 | Structural context analysis    | 100%        | 100%     | 0%      | 0.90           | 0.001 ms      |
-| ATTR001| Runtime object inspection      | 100%        | 100%     | 0%      | 0.98           | 0.009 ms      |
+| ATTR001| Runtime object inspection      | 100%        | 100%     | 0%      | 0.98           | 0.002 ms      |
+| ATTR002| Deterministic API lookup       | 100%        | 100%     | 0%      | 0.95           | 0.003 ms      |
+| ATTR003| Lexical typo heuristic         | 100%        | 100%     | 0%      | 0.84           | 0.089 ms      |
 
 **Hypothesis, supported by the above:** deterministic diagnostic
-strategies (KEY002, KEY003, ATTR001) achieve higher precision and
-zero measured false positives compared to heuristic lexical
-similarity (KEY001), though they solve a narrower class of problems.
-This pattern held again when the architecture was extended to a
-second exception family entirely, which is itself evidence the
-finding is about the diagnostic strategy, not something specific to
-KeyError.
+strategies (KEY002, KEY003, ATTR001, ATTR002) reliably achieve zero
+measured false positives, while heuristic lexical strategies (KEY001,
+ATTR003) carry some false-positive risk by nature of inferring from
+similarity rather than observing a fact — though ATTR003 measured 0%
+FP on its own current benchmark, its confidence tier (0.80-0.90) is
+set below the deterministic rules specifically because that risk is
+structural, not because it has been observed yet at this dataset size.
+This pattern held across two entirely different exception families,
+which is evidence the finding is about the diagnostic strategy, not
+something specific to KeyError. ATTR003 also measurably costs more
+compute than deterministic lookups (0.089ms vs ~0.002-0.003ms) — the
+price of searching filtered candidates by edit distance instead of an
+O(1) lookup, still negligible in absolute terms. (Timing figures carry
+normal run-to-run jitter — see `benchmark/run.py`'s p95 reporting for
+a steadier picture than a single average.)
 
 ## Known limitations (documented, not hidden)
 
@@ -218,6 +227,14 @@ work:
   report), the fix was to make the report honestly show train/test
   counts for every un-implemented rule — not to add a manufactured
   benchmark case just to make a status table look complete.
+- **A design-contract step written before any benchmark cases paid
+  for itself exactly once, and it was worth it.** ATTR003 (the first
+  heuristic rule in a second family) went from red tests to accepted
+  on the first implementation attempt, with zero iteration — the only
+  heuristic rule in the project to do so. Full analysis in
+  [`docs/RETROSPECTIVE_v2.md`](docs/RETROSPECTIVE_v2.md), written
+  before starting IndexError specifically so this doesn't need
+  rediscovering.
 
 ## Releases
 
@@ -248,31 +265,40 @@ comparing diagnostic strategies rather than just accumulating count.
 commitments — they'll adjust as each family's benchmark reveals what's
 actually worth building):
 
-| Family | Rules planned | Implemented |
-|---|---:|---:|
-| KeyError | 3 | 3 |
-| AttributeError | 3 | 1 |
-| IndexError | — | 0 |
-| TypeError | — | 0 |
-| ValueError | — | 0 |
+| Family | Rules planned | Implemented | Status |
+|---|---:|---:|---|
+| KeyError | 3 | 3 | Closed |
+| AttributeError | 3 | 3 | Closed |
+| IndexError | — | 0 | Next |
+| TypeError | — | 0 | Planned |
+| ValueError | — | 0 | Planned |
 
-**KeyError** (3/3 strategies represented): heuristic lexical (KEY001),
-deterministic normalization (KEY002), structural (KEY003) — complete
-for now.
+**KeyError — closed** (3/3 strategies represented): heuristic lexical
+(KEY001), deterministic normalization (KEY002), structural (KEY003).
 
-**AttributeError** (1 of 3 planned): runtime object inspection
-(ATTR001, done). Ground truth already defined for API misuse (ATTR002)
-and typo detection (ATTR003) — see `benchmark/README.md`. ATTR002 is
-next, not ATTR003 — it pairs naturally with ATTR001 as a second
-deterministic runtime-inspection rule (`None.foo()` vs
-`"hello".append()`/`[].add()`) before introducing a heuristic strategy;
-mirrors how the KeyError family progressed from deterministic to
-heuristic reasoning.
+**AttributeError — closed** (3/3 strategies represented): runtime
+object inspection (ATTR001), deterministic API lookup (ATTR002),
+lexical typo heuristic (ATTR003). Every rule this benchmark ever
+committed to ahead of implementation has been built and accepted — the
+"ground-truth rules... not yet implemented" report section is empty
+for the first time (see `benchmark/README.md`). "Closed" means further
+AttributeError rules require a new benchmark case and an explicit
+roadmap decision, not that the family can never grow — the point is to
+avoid a family feeling permanently half-finished by default.
+
+**IndexError is next.** Before starting it: see
+[`docs/RETROSPECTIVE_v2.md`](docs/RETROSPECTIVE_v2.md) for what
+actually worked and cost time across KeyError and AttributeError,
+written specifically to inform this transition rather than repeating
+the same discovery process. One concrete watch-item carried forward:
+`_levenshtein` is now duplicated in both `rules/keyerror/rules.py` and
+`rules/attributeerror/rules.py` — not yet worth extracting (see ADR
+0001 on avoiding premature abstraction), but a third occurrence in
+IndexError is the signal to actually do it.
 
 **Future families**, each intended to eventually span multiple
-strategies rather than a single rule: IndexError, TypeError,
-ValueError, ImportError/ModuleNotFoundError, ZeroDivisionError,
-FileNotFoundError.
+strategies rather than a single rule: TypeError, ValueError,
+ImportError/ModuleNotFoundError, ZeroDivisionError, FileNotFoundError.
 
 **Beyond new rules:**
 - Frame-walking for upstream causal chains (v1 only diagnoses the
@@ -281,8 +307,10 @@ FileNotFoundError.
   (ADR 0001 — deliberately not built prematurely)
 - A richer shared `RuleResult` abstraction, if/when enough rules
   across enough families are visibly duplicating the same
-  confidence/evidence/fix construction — deliberately not built now,
-  since one AttributeError rule isn't evidence of that yet
+  confidence/evidence/fix construction — six rules across two families
+  haven't shown clear enough duplication yet to justify this; revisit
+  once IndexError exists and there's a third family's worth of
+  evidence either way
 - `sys.excepthook` integration for zero-config drop-in use
 - IDE integration, PyPI packaging, plugin API for third-party rule
   packs — real directions, explicitly not v1 scope
@@ -297,6 +325,7 @@ here rather than only quoting a single current number.
 |---|---:|---:|---:|---:|
 | v1.0.0 (KEY001-003) | 22 | ~0.6s | ~0.05s | 92% |
 | ATTR001 added | 31 | ~0.9s | ~0.07s | 92% |
+| AttributeError closed (ATTR001-003) | 51 | ~1.8s | ~0.09s | 92% |
 
 ## Demo
 
@@ -311,7 +340,7 @@ python demo.py --fast   # no pauses, good for CI or a quick check
 
 ## Testing & CI
 
-- **31 tests, 92% coverage** — unit tests per rule
+- **51 tests, 92% coverage** — unit tests per rule
   (`tests/test_keyerror.py`, `tests/test_attributeerror.py`)
   plus property-based fuzz tests (`tests/test_property_based.py`, via
   [Hypothesis](https://hypothesis.readthedocs.io/)) that generate ~250
