@@ -76,6 +76,20 @@ class ExceptionContext:
                 except Exception:
                     local_vars[name] = ("<unknown>", "<unrepr-able>")
 
+                # Skip dunder-named locals (e.g. `__builtins__`, which
+                # is itself a dict of ~150 builtin names) when
+                # gathering candidate keys/sections. At module level
+                # (e.g. a script run via runpy), frame.f_locals IS the
+                # module namespace, so `__builtins__` would otherwise
+                # get pooled in as a "dict-like local" and flood
+                # KEY001/003's candidate pool with irrelevant matches
+                # (discovered via the CLI: 'Nmae' tied with 'None' at
+                # edit distance 2, purely because __builtins__ leaked
+                # in). Same filtering principle already used for
+                # ATTR003's attribute candidates.
+                if name.startswith("__") and name.endswith("__"):
+                    continue
+
                 keys = _safe_extract_keys(value)
                 if keys is not None:
                     available_keys[name] = keys

@@ -117,6 +117,32 @@ def test_context_survives_dict_with_unrepr_able_keys_in_nested_structure():
         assert ctx.nested_sections["section"] == ["inner_key"]
 
 
+def test_dunder_locals_do_not_pollute_available_keys():
+    """Regression test for a real bug found via the CLI: at module
+    level (e.g. a script run via `runpy`), frame.f_locals IS the
+    module namespace, which includes `__builtins__` — itself a dict of
+    ~150 builtin names. Before this was filtered, KEY001's candidate
+    pool got flooded with irrelevant matches: 'Nmae' tied with 'None'
+    at edit distance 2, purely because __builtins__ leaked into
+    available_keys. Dunder-named locals must never appear in
+    available_keys or nested_sections."""
+
+    def trigger():
+        # Simulate the pollution directly: a dunder-named dict-like
+        # local sitting alongside the real one.
+        __builtins__ = {"None": None, "map": None, "max": None}  # noqa: F841
+        data = {"Name": "Ada"}
+        return data["Nmae"]
+
+    try:
+        trigger()
+    except KeyError as exc:
+        ctx = ExceptionContext.from_exception(exc, exc.__traceback__)
+        assert "__builtins__" not in ctx.available_keys
+        # The real local should still be captured correctly.
+        assert ctx.available_keys.get("data") == ["Name"]
+
+
 @given(st.dictionaries(identifier_like_text, st.integers(), max_size=15))
 @settings(max_examples=100)
 def test_analyze_never_crashes_on_arbitrary_dict_shapes(contents):
