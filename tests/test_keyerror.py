@@ -192,3 +192,90 @@ def test_matchresult_confidence_bounds_enforced():
         MatchResult(confidence=1.5, explanation="bad")
     with pytest.raises(ValueError):
         MatchResult(confidence=-0.1, explanation="bad")
+
+
+# ---------------------------------------------------------------------
+# GH-20 fix: KeyError with a sentence-style message, not a bare key.
+# Real bug found via evaluation/github/ (results.csv GH-20): pandas'
+# .astype() raises KeyError with a full descriptive sentence as
+# args[0] ('Only a column name can be used... "CustomerId" not found
+# in columns.'), not the bare key 'CustomerId'. Every KeyError rule
+# assumed args[0] IS the bare key — written BEFORE the fix, so these
+# should currently FAIL against the unfixed implementation.
+# ---------------------------------------------------------------------
+
+from tracekit.rules.keyerror.rules import KeyErrorCaseMismatchRule as _KEY002
+
+
+def _make_ctx_from_trigger(trigger):
+    try:
+        trigger()
+    except KeyError as exc:
+        return ExceptionContext.from_exception(exc, exc.__traceback__)
+    raise AssertionError("expected KeyError was not raised")
+
+
+def test_key002_fires_on_sentence_style_pandas_message():
+    """The exact GH-20 scenario: a case-mismatch key embedded in a
+    full sentence (pandas' .astype() dtype-mapping KeyError), not a
+    bare key. KEY002 should extract 'CustomerId' from the sentence and
+    match it against the real column 'customerid'."""
+
+    class DF:
+        columns = ["customerid", "name"]
+
+    def astype_check(df, key):
+        if key not in df.columns:
+            raise KeyError(
+                f"Only a column name can be used for the key in a dtype "
+                f"mappings argument. '{key}' not found in columns."
+            )
+
+    def trigger():
+        astype_check(DF(), "CustomerId")
+
+    ctx = _make_ctx_from_trigger(trigger)
+    result = _KEY002().matches(ctx)
+    assert result is not None
+    assert "CustomerId" in result.explanation or "customerid" in result.explanation
+
+
+def test_key001_fires_on_sentence_style_message_generalization():
+    """A DIFFERENT sentence-style pandas KeyError than the exact GH-20
+    case (different column names, a typo instead of a case mismatch)
+    — a generalization check, not a memorized special case."""
+
+    class DF:
+        columns = ["timestamp", "value"]
+
+    def astype_check(df, key):
+        if key not in df.columns:
+            raise KeyError(
+                f"Only a column name can be used for the key in a dtype "
+                f"mappings argument. '{key}' not found in columns."
+            )
+
+    def trigger():
+        astype_check(DF(), "timestmap")
+
+    ctx = _make_ctx_from_trigger(trigger)
+    result = KeyErrorTypoRule().matches(ctx)
+    assert result is not None
+    assert "timestamp" in result.explanation
+
+
+def test_key001_still_fires_on_bare_key_containing_a_space():
+    """Regression safety net: a REAL bare key that happens to contain
+    a space ('first name'), with no sentence and no quote characters
+    involved, must not be broken by whatever heuristic distinguishes
+    'this looks like a sentence' from 'this is a bare key with a
+    space in it'. This must pass both before AND after the GH-20 fix."""
+
+    def trigger():
+        d = {"first name": "Ada"}
+        return d["first nsme"]
+
+    ctx = _make_ctx_from_trigger(trigger)
+    result = KeyErrorTypoRule().matches(ctx)
+    assert result is not None
+    assert "first name" in result.explanation
