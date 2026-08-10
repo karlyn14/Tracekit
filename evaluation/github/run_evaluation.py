@@ -494,19 +494,26 @@ CASES = [
         "exception": "KeyError", "expected_rule": "KEY002 (but see notes)",
         "real_fix": "Same root cause as GH-09 (case mismatch), but via .astype()'s dtype-mapping check, whose KeyError.args[0] is a full sentence, not the bare key",
         "repro_factory": case_20_pandas_astype_full_sentence_keyerror,
-        "correct": "No",
+        "correct": "Yes (FIXED)",
         "notes": (
-            "GENUINE DISCOVERED LIMITATION. Same real bug as GH-09, but pandas' "
-            ".astype() raises KeyError with a full descriptive SENTENCE as "
-            "args[0] ('Only a column name can be used... CustomerId not found "
-            "in columns.'), not the bare key. TraceKit's KEY001/002/003 all "
-            "assume args[0] IS the bare missing key — this assumption holds for "
-            "most dict/DataFrame access but not for every real library's KeyError "
-            "variant. Result: TraceKit silently misses a real, fixable case-mismatch "
-            "bug it would have caught via GH-09's access pattern. This is a false "
-            "negative, not a crash — but it's a real coverage gap worth fixing "
-            "(e.g. falling back to substring/regex extraction of a quoted key "
-            "from a longer message) in a future version."
+            "FIXED, with a before/after story worth keeping. Originally recorded "
+            "as a genuine discovered limitation: pandas' .astype() raises "
+            "KeyError with a full descriptive SENTENCE as args[0] ('Only a "
+            "column name can be used... CustomerId not found in columns.'), not "
+            "the bare key — every KeyError rule assumed args[0] IS the bare key, "
+            "so this silently missed a real, fixable case-mismatch bug it would "
+            "have caught via GH-09's access pattern. Per the project's "
+            "benchmark-first discipline, this was promoted to proper benchmark "
+            "ground truth (KEY001-075/076/077 in "
+            "benchmark/data/keyerror_cases.jsonl) BEFORE being fixed — including "
+            "a regression-safety case (KEY001-077) proving the fix doesn't break "
+            "real bare keys that happen to contain a space. Fix: "
+            "_missing_key_from_value() now falls back to extracting a single "
+            "quoted substring when args[0] contains both a space AND quote "
+            "characters (a strong combined signal of 'sentence with an embedded "
+            "key'), otherwise uses args[0] as-is exactly as before. Verified via "
+            "full benchmark re-run: zero new false positives, zero regressions "
+            "on any existing case."
         ),
     },
 ]
@@ -559,8 +566,8 @@ def main():
         print(f"{row['id']} [{row['correct']}]: {row['tracekit_diagnosis']}")
 
     print()
-    fully_correct = sum(1 for r in rows if r["correct"] == "Yes")
-    partial = sum(1 for r in rows if r["correct"].startswith("Yes ("))
+    fully_correct = sum(1 for r in rows if r["correct"] == "Yes" or r["correct"] == "Yes (FIXED)")
+    partial = sum(1 for r in rows if r["correct"].startswith("Yes (") and r["correct"] != "Yes (FIXED)")
     incorrect = sum(1 for r in rows if r["correct"] == "No")
     print(f"Summary: {fully_correct} fully correct, {partial} correct-with-caveat, "
           f"{incorrect} incorrect, out of {len(rows)} total.")

@@ -11,19 +11,44 @@ evaluation/github/run_evaluation.py`.
 
 ## Headline result
 
-**13 fully correct, 4 correct-with-a-stated-caveat, 3 incorrect, out
-of 20** — a real number from a small, honestly-sourced sample, not a
-general accuracy claim (see the benchmark's own scope disclaimer,
-which applies equally here).
+**14 fully correct, 4 correct-with-a-stated-caveat, 2 incorrect, out
+of 20** (originally 13/4/3 — GH-20 has since been fixed, see below) —
+a real number from a small, honestly-sourced sample, not a general
+accuracy claim (see the benchmark's own scope disclaimer, which
+applies equally here).
 
 | Outcome | Count | Cases |
 |---|---:|---|
-| Fully correct | 13 | GH-03,04,05,06,07,08,09,12,13,16,17,18,19 |
+| Fully correct | 14 | GH-03,04,05,06,07,08,09,12,13,16,17,18,19,20 |
 | Correct, immediate cause only | 3 | GH-10, 11, 15 |
 | Correct, generic phrasing | 1 | GH-14 |
-| **Incorrect** | **3** | **GH-01, GH-02, GH-20** |
+| **Incorrect** | **2** | **GH-01, GH-02** |
 
-## The three failures — the important part
+## GH-20 — fixed (was one of the three original failures)
+
+Originally: a real, discovered coverage gap. Pandas' `.astype()`
+dtype-mapping check raises `KeyError` with a full descriptive
+**sentence** as `args[0]` (`"Only a column name can be used... 'X' not
+found in columns."`), not the bare key — every KeyError rule assumed
+`args[0]` *is* the bare key, so this silently missed a real, fixable
+case-mismatch bug that GH-09 (a different access pattern, same root
+cause) caught correctly.
+
+Per this project's benchmark-first discipline, this was **not**
+patched reactively. It was promoted to proper benchmark ground truth
+first (`KEY001-075/076/077` in `benchmark/data/keyerror_cases.jsonl`,
+including a dedicated regression-safety case proving the fix
+wouldn't break real space-containing bare keys), given unit tests
+written against the *unfixed* code (confirmed red), then fixed in
+`_missing_key_from_value()` — a fallback that extracts a single quoted
+substring only when `args[0]` contains both a space and quote
+characters, otherwise using it as-is exactly as before. Verified via a
+full benchmark re-run: zero new false positives, zero regressions on
+any of the other 89 benchmark cases. Then, and only then, this
+external evaluation was re-run to confirm the fix against the original
+real-world case.
+
+## The two remaining failures — the important part
 
 Per the instruction that started this evaluation: *"the failures are
 likely to teach us more than the successes."* Each one is a genuine,
@@ -48,7 +73,10 @@ fundamentally different (and harder) kind of signal than lexical
 similarity. This is a genuine, non-obvious limitation the benchmark's
 own synthetic cases never surfaced, because every benchmark case was
 authored with the "request has the typo" framing baked in by
-construction.
+construction. **Not yet fixed — likely needs a new design approach,
+not a KEY001 tweak (see project discussion: this may need actual
+semantic/dictionary knowledge, which is a different kind of signal
+than anything currently in TraceKit).**
 
 ### GH-02 — a confirmed instance of the known KEY001 limitation, found in the wild
 
@@ -63,29 +91,17 @@ This is the *same class* of false positive already documented in
 was a synthetic, hand-written adversarial example. This is
 confirmation that the same failure mode occurs on genuine, unrelated
 external code, not just in a benchmark case designed to expose it.
+**Not yet fixed — same underlying limitation as GH-01: lexical
+similarity alone cannot distinguish "close enough to be a typo" from
+"close enough to be a coincidence."**
 
-### GH-20 — a real coverage gap: not every library's KeyError has a bare key
+### GH-20 — see "GH-20 — fixed" section above
 
-Real bug: same root cause as GH-09
-([pandas-dev/pandas #59045](https://github.com/pandas-dev/pandas/issues/59045)),
-a case-mismatched column name (`'CustomerId'` requested,
-`'customerid'` actual). GH-09 (direct column access) was diagnosed
-correctly by KEY002. GH-20 uses pandas' `.astype()` dtype-mapping
-check instead, which raises `KeyError` with a full **sentence** as
-`args[0]` — `"Only a column name can be used... 'CustomerId' not
-found in columns."` — not the bare key.
-
-Every KeyError rule (KEY001-003) assumes `exc_value.args[0]` *is* the
-missing key. That assumption holds for plain dict/DataFrame indexing
-(the overwhelmingly common case, and the only shape in the benchmark
-dataset), but not for every real library's KeyError variant. Result:
-TraceKit silently misses a real, fixable case-mismatch bug that it
-would have caught one call-site over. This is a **false negative**,
-not a crash — but it's a real, actionable coverage gap: TraceKit could
-fall back to extracting a quoted substring from a longer message when
-the bare-key assumption doesn't hold. Filed as future work, not fixed
-in this evaluation round (see "What this evaluation does NOT do"
-below).
+This was originally the third failure in this set. It's covered in
+its own section above rather than here, since — unlike GH-01/GH-02 —
+it has since been fixed, and the fix's process (benchmark ground truth
+→ tests → implementation → re-evaluation) is itself worth keeping
+visible as its own story.
 
 ## What generalized well
 
@@ -117,11 +133,13 @@ below).
 
 ## What this evaluation does NOT do
 
-- It does not fix GH-01, GH-02, or GH-20. Per the same benchmark-first
+- GH-01 and GH-02 are not yet fixed. Per the same benchmark-first
   discipline used throughout this project, a fix earns its place by
   being benchmarked, not patched reactively the moment a failure is
-  found. These three are logged as findings for a future rule-review
-  cycle, not silently patched here.
+  found. GH-20 followed exactly that discipline and is now fixed (see
+  above); GH-01/GH-02 remain logged as findings for a future
+  rule-review cycle — likely a genuinely new design question (see
+  GH-01's note), not a simple tweak.
 - It is not a claim that TraceKit "handles real code" in general — 20
   cases, sourced by one person's search session, is a real but small
   sample. Treat these numbers exactly as the benchmark's own numbers

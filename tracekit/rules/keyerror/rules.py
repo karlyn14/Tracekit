@@ -13,6 +13,8 @@ Rule inventory (v1, deliberately small — pipeline first, breadth later):
 
 from __future__ import annotations
 
+import re
+
 from typing import Optional
 
 from tracekit.core.context import ExceptionContext
@@ -261,12 +263,49 @@ class KeyErrorTypoRule(Rule):
         )
 
 
+_QUOTED_SUBSTRING_RE = re.compile(r"['\"]([^'\"]+)['\"]")
+
+
 def _missing_key_from_value(exc_value: BaseException) -> Optional[str]:
-    """KeyError's .args[0] is the missing key itself."""
+    """
+    KeyError's .args[0] is normally the missing key itself (the
+    overwhelmingly common case, and the only shape most of TraceKit's
+    benchmark previously covered). Some libraries instead raise
+    KeyError with a full descriptive SENTENCE as args[0], with the
+    actual key embedded in quotes — e.g. pandas' `.astype()`
+    dtype-mapping check: "Only a column name can be used... 'X' not
+    found in columns." Confirmed as a real, external bug via
+    evaluation/github/results.csv (GH-20): this caused a silent false
+    negative on a real, fixable case-mismatch bug.
+
+    Strategy: use args[0] as-is whenever possible — this preserves
+    correct behavior for the common case, INCLUDING real keys that
+    happen to contain a space (e.g. {'first name': ...}), which must
+    not be broken by whatever detects "this looks like a sentence".
+    Only fall back to extracting a quoted substring when args[0]
+    itself contains quote characters AND multiple words — a strong
+    combined signal of "this is a description with an embedded key",
+    not just "this key has a space in it". If extraction finds more
+    than one quoted substring, the correct one is ambiguous — abstain
+    rather than guess (same ambiguity-averse principle used
+    throughout this rule set).
+    """
     if not exc_value.args:
         return None
-    key = exc_value.args[0]
-    return key if isinstance(key, str) else None
+    raw = exc_value.args[0]
+    if not isinstance(raw, str):
+        return None
+
+    looks_like_a_sentence = (
+        (" " in raw) and ("'" in raw or '"' in raw)
+    )
+    if not looks_like_a_sentence:
+        return raw
+
+    matches = _QUOTED_SUBSTRING_RE.findall(raw)
+    if len(matches) == 1:
+        return matches[0]
+    return None
 
 
 def _available_keys_from_source(ctx: ExceptionContext) -> list[str]:
