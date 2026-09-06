@@ -252,7 +252,8 @@ class KeyErrorTypoRule(Rule):
         return MatchResult(
             confidence=confidence,
             explanation=(
-                f"'{missing_key}' is not a key — did you mean '{best_match}'?"
+                f"'{missing_key}' is not a key — the closest existing "
+                f"key is '{best_match}' (edit distance {best_distance})."
             ),
             evidence=[
                 f"Requested key: {missing_key!r}",

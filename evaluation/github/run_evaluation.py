@@ -286,15 +286,27 @@ CASES = [
         "exception": "KeyError", "expected_rule": "KEY001",
         "real_fix": "Caller passed excetion= instead of exception= as a kwarg (issue author identifies this typo directly)",
         "repro_factory": case_01_flake8_typo_kwarg,
-        "correct": "No",
+        "correct": "Yes (FIXED)",
         "notes": (
-            "TraceKit found the right pair ('exception'/'excetion', distance 1) but "
-            "suggested the WRONG DIRECTION of fix: 'did you mean excetion?' — which "
-            "would make the code request the misspelled key, perpetuating the bug, "
-            "not fixing it (the real fix renames the typo'd kwarg to 'exception'). "
-            "KEY001 has no notion of which spelling is 'more standard' — it only "
-            "measures string distance, not which side of a mismatch is likely "
-            "correct English. Genuine, non-obvious limitation."
+            "FIXED, with a before/after story worth keeping (same discipline as "
+            "GH-20). Originally: TraceKit found the right pair "
+            "('exception'/'excetion', distance 1) but suggested the WRONG "
+            "DIRECTION of fix — 'did you mean excetion?' — which would make the "
+            "code request the misspelled key, perpetuating the bug rather than "
+            "fixing it. Root cause: KEY001's matching was always correct; only "
+            "its explanation TEXT asserted a fix direction it had no basis to "
+            "assert (edit distance is symmetric — it cannot tell you which side "
+            "of a close pair is the standard spelling). Per this project's "
+            "process (docs/design/GH01-*.md, four stages: failure analysis -> "
+            "solution design -> behavioral contract -> benchmark ground truth "
+            "-> RED tests -> implementation), the fix touches ONLY the "
+            "explanation string — matching, confidence, evidence, and 'fix' "
+            "text are all explicitly unchanged, and this was verified via a "
+            "full benchmark re-run showing byte-for-byte identical numbers "
+            "before and after (42 held-out cases, same 100%/100%/22%, same "
+            "exact false-positive list). Explanation is now: \"'exception' is "
+            "not a key — the closest existing key is 'excetion' (edit distance "
+            "1).\" — states the fact without implying a direction."
         ),
     },
     {
