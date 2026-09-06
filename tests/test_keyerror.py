@@ -279,3 +279,113 @@ def test_key001_still_fires_on_bare_key_containing_a_space():
     result = KeyErrorTypoRule().matches(ctx)
     assert result is not None
     assert "first name" in result.explanation
+
+
+# ---------------------------------------------------------------------
+# GH-01 behavioral contract (docs/design/GH01-behavioral-contract.md):
+# KEY001's MATCHING is already correct — these tests do not touch or
+# re-test the matching/threshold/ambiguity logic. What's wrong is the
+# INTERPRETATION: the old explanation text ("did you mean 'X'?")
+# asserts a fix direction TraceKit has no basis to assert. Real case:
+# PyCQA/flake8 #668 — a caller typo'd a kwarg name ('excetion' instead
+# of 'exception'); KEY001 found the right pair at the right distance,
+# but told the user to request the MISSPELLED key, which would
+# perpetuate the bug rather than fix it.
+#
+# These tests are RED by design until Stage 6 implements the frozen
+# contract: explanation becomes direction-neutral; fix text, matching,
+# and confidence are explicitly UNCHANGED (see contract for why 'fix'
+# doesn't need to change — it was already direction-neutral).
+# ---------------------------------------------------------------------
+
+def test_key001_explanation_is_direction_neutral_on_gh01_exact_case():
+    """The exact GH-01 scenario: the DATA has the typo ('excetion' in
+    kwargs), the REQUEST is the correct, standard spelling
+    ('exception'). The old wording ("did you mean 'excetion'?") would
+    tell the user to request the misspelled key — exactly backwards.
+    The new explanation must state the fact (these two keys are close)
+    without implying which one is correct."""
+
+    def trigger():
+        def make_error(**kwargs):
+            return kwargs.pop("exception")
+        return make_error(excetion=Exception("boom"), plugin="F")
+
+    ctx = _make_ctx_from_trigger(trigger)
+    result = KeyErrorTypoRule().matches(ctx)
+
+    assert result is not None
+    # The specific old, direction-asserting phrase must be gone.
+    assert "did you mean" not in result.explanation.lower()
+    # The fact itself — that these two keys are close — must still be
+    # stated. Both names should appear somewhere in the explanation.
+    assert "exception" in result.explanation
+    assert "excetion" in result.explanation
+    # The edit distance fact is part of what makes this a stated fact
+    # rather than an implied verdict — the contract's new wording
+    # includes it explicitly.
+    assert "1" in result.explanation  # edit distance is 1
+
+
+def test_key001_explanation_is_direction_neutral_generalization():
+    """A DIFFERENT reversed-direction case (not the memorized GH-01
+    values) — the data has 'debgu' (typo), the request 'debug' (the
+    correct, standard spelling) is legitimate. Same contract applies."""
+
+    def trigger():
+        settings = {"debgu": True, "verbose": False}
+        return settings["debug"]
+
+    ctx = _make_ctx_from_trigger(trigger)
+    result = KeyErrorTypoRule().matches(ctx)
+
+    assert result is not None
+    assert "did you mean" not in result.explanation.lower()
+    assert "debug" in result.explanation
+    assert "debgu" in result.explanation
+
+
+def test_key001_fix_text_is_unchanged_by_the_gh01_contract():
+    """Per the frozen contract: 'fix' was ALREADY direction-neutral
+    ("Check for a typo: 'X' vs 'Y'" never prescribed a direction), so
+    Stage 6 must NOT touch it — only 'explanation' changes. This test
+    locks the 'fix' string's exact, unchanged format in place so a
+    future implementation can't accidentally widen its change beyond
+    what the contract allows."""
+
+    def trigger():
+        def make_error(**kwargs):
+            return kwargs.pop("exception")
+        return make_error(excetion=Exception("boom"), plugin="F")
+
+    ctx = _make_ctx_from_trigger(trigger)
+    result = KeyErrorTypoRule().matches(ctx)
+
+    assert result is not None
+    assert result.fix == "Check for a typo: 'exception' vs 'excetion'"
+
+
+def test_key001_confidence_is_unaffected_by_the_gh01_contract():
+    """Per the frozen contract: confidence measures match certainty,
+    which the wording change doesn't touch. Must stay exactly the
+    existing formula's value (0.9 - 0.25 * distance) for both the
+    exact GH-01 case (distance 1) and the generalization case
+    (distance 2)."""
+
+    def trigger_distance1():
+        def make_error(**kwargs):
+            return kwargs.pop("exception")
+        return make_error(excetion=Exception("boom"), plugin="F")
+
+    def trigger_distance2():
+        settings = {"debgu": True, "verbose": False}
+        return settings["debug"]
+
+    ctx1 = _make_ctx_from_trigger(trigger_distance1)
+    ctx2 = _make_ctx_from_trigger(trigger_distance2)
+
+    result1 = KeyErrorTypoRule().matches(ctx1)
+    result2 = KeyErrorTypoRule().matches(ctx2)
+
+    assert result1.confidence == 0.9 - 0.25 * 1
+    assert result2.confidence == 0.9 - 0.25 * 2
