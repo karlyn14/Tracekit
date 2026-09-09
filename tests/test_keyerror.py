@@ -389,3 +389,110 @@ def test_key001_confidence_is_unaffected_by_the_gh01_contract():
 
     assert result1.confidence == 0.9 - 0.25 * 1
     assert result2.confidence == 0.9 - 0.25 * 2
+
+
+# ---------------------------------------------------------------------
+# GH-02 behavioral contract (docs/design/GH02-behavioral-contract.md):
+# switch KEY001's distance metric to restricted Damerau-Levenshtein
+# (transpositions cost 1, not 2) and tighten DEFAULT_MAX_EDIT_DISTANCE
+# from 2 to 1. Confirmed via a full 14-case sweep (Stage 10): every
+# currently-correct distance-2 match is a transposition; none of the
+# known false positives are. These tests are RED by design until
+# Stage 12 implements the frozen contract — the current implementation
+# still uses plain Levenshtein with threshold 2.
+# ---------------------------------------------------------------------
+
+def test_key001_transposition_typo_still_detected():
+    """Genuine existing case, must survive the change: 'Naem'/'Name'
+    is a transposition, currently caught at plain distance 2. Must
+    still fire after the fix (now at Damerau distance 1). This is a
+    regression guard, not expected to be RED — it should already pass
+    under both the current and the frozen-contract implementation."""
+
+    def trigger():
+        d = {"Name": "Ada"}
+        return d["Naem"]
+
+    ctx = _make_ctx_from_trigger(trigger)
+    result = KeyErrorTypoRule().matches(ctx)
+    assert result is not None
+    assert "Name" in result.explanation
+
+
+def test_key001_gh02_no_longer_matches():
+    """RED: GH-02's exact scenario. 'data' and 'meta' are unrelated,
+    legitimate keys (edit distance 2, not a transposition — Damerau
+    distance is also 2). Under the frozen contract (threshold 1),
+    this must NOT match. Currently fails: the unfixed implementation
+    still matches at plain distance 2."""
+
+    def trigger():
+        response = {"meta": {"code": 200}, "pagination": {}}
+        return response["data"]
+
+    ctx = _make_ctx_from_trigger(trigger)
+    result = KeyErrorTypoRule().matches(ctx)
+    assert result is None
+
+
+def test_key001_server_host_port_no_longer_matches():
+    """RED: a known false positive (not a transposition — Damerau
+    distance is also 2), same shape as GH-02. Must stop matching under
+    the frozen contract's threshold of 1."""
+
+    def trigger():
+        d = {"SERVER_HOST": "x"}
+        return d["SERVER_PORT"]
+
+    ctx = _make_ctx_from_trigger(trigger)
+    result = KeyErrorTypoRule().matches(ctx)
+    assert result is None
+
+
+def test_key001_port_host_no_longer_matches():
+    """RED: another known false positive, same shape as GH-02."""
+
+    def trigger():
+        config = {"host": "localhost"}
+        return config["port"]
+
+    ctx = _make_ctx_from_trigger(trigger)
+    result = KeyErrorTypoRule().matches(ctx)
+    assert result is None
+
+
+def test_key001_distance1_behavior_is_unaffected():
+    """Regression guard: an ordinary distance-1 typo, untouched by
+    this change (threshold was already >= 1, and Damerau distance
+    equals plain distance whenever there's no transposition to
+    collapse). Must pass before AND after — not expected to be RED."""
+
+    def trigger():
+        d = {"theme": "dark"}
+        return d["themme"]
+
+    ctx = _make_ctx_from_trigger(trigger)
+    result = KeyErrorTypoRule().matches(ctx)
+    assert result is not None
+    assert "theme" in result.explanation
+    assert result.confidence == 0.9 - 0.25 * 1
+
+
+def test_key001_confidence_reflects_damerau_distance_for_transpositions():
+    """RED, and intentionally so: this is not a new confidence
+    decision (the formula 0.9 - 0.25*distance is explicitly unchanged
+    per the frozen contract) — it's a direct, mechanical consequence
+    of the distance metric changing. Currently 'Naem'/'Name' computes
+    at plain distance 2 (confidence 0.4). After the fix it computes at
+    Damerau distance 1 (confidence 0.65). This test locks in the
+    POST-fix value, so it's expected to fail now and pass once Stage
+    12 lands — not a sign anything is wrong before then."""
+
+    def trigger():
+        d = {"Name": "Ada"}
+        return d["Naem"]
+
+    ctx = _make_ctx_from_trigger(trigger)
+    result = KeyErrorTypoRule().matches(ctx)
+    assert result is not None
+    assert result.confidence == 0.65
