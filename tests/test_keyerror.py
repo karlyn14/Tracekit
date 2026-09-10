@@ -366,29 +366,38 @@ def test_key001_fix_text_is_unchanged_by_the_gh01_contract():
 
 
 def test_key001_confidence_is_unaffected_by_the_gh01_contract():
-    """Per the frozen contract: confidence measures match certainty,
-    which the wording change doesn't touch. Must stay exactly the
-    existing formula's value (0.9 - 0.25 * distance) for both the
-    exact GH-01 case (distance 1) and the generalization case
-    (distance 2)."""
+    """Per the frozen GH-01 contract: confidence measures match
+    certainty, which the wording change doesn't touch — the formula
+    (0.9 - 0.25 * distance) is unchanged.
+
+    Updated post-GH02: this test originally also checked a
+    'distance 2' example (settings={'debgu':...}; settings['debug']).
+    That example turns out to be a transposition, and under GH-02's
+    Damerau-Levenshtein fix it now correctly computes at distance 1,
+    not 2 — and distance-2 KEY001 matches no longer exist at all under
+    the tightened threshold (see docs/design/GH02-behavioral-contract.md).
+    This isn't a weakening of the test's intent (confidence still
+    follows the formula for whatever distance is actually computed) —
+    it's the same example, correctly reflecting the current, intended
+    system behavior rather than a stale pre-GH02 number."""
 
     def trigger_distance1():
         def make_error(**kwargs):
             return kwargs.pop("exception")
         return make_error(excetion=Exception("boom"), plugin="F")
 
-    def trigger_distance2():
+    def trigger_now_also_distance1():
         settings = {"debgu": True, "verbose": False}
         return settings["debug"]
 
     ctx1 = _make_ctx_from_trigger(trigger_distance1)
-    ctx2 = _make_ctx_from_trigger(trigger_distance2)
+    ctx2 = _make_ctx_from_trigger(trigger_now_also_distance1)
 
     result1 = KeyErrorTypoRule().matches(ctx1)
     result2 = KeyErrorTypoRule().matches(ctx2)
 
     assert result1.confidence == 0.9 - 0.25 * 1
-    assert result2.confidence == 0.9 - 0.25 * 2
+    assert result2.confidence == 0.9 - 0.25 * 1
 
 
 # ---------------------------------------------------------------------

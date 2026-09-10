@@ -315,13 +315,26 @@ CASES = [
         "exception": "KeyError", "expected_rule": None,
         "real_fix": "Instagram API response sometimes omits 'data' key entirely; fix checks for key defensively (not a typo)",
         "repro_factory": case_02_python_instagram_missing_data,
-        "correct": "No",
+        "correct": "Yes (FIXED)",
         "notes": (
-            "False positive: 'data' and 'meta' are both short, common words at edit "
-            "distance 2 (within KEY001's threshold), but they are NOT typos of each "
-            "other — 'data' is a legitimately, sometimes-absent field. Same class of "
-            "failure as the documented FEATURE_X/FEATURE_Y limitation, now confirmed "
-            "on real external data, not just a synthetic benchmark case."
+            "FIXED via a multi-stage design process (docs/design/GH02-*.md,"
+            " Stages 7-12): 'data' and 'meta' are both short, common words at "
+            "plain edit distance 2, but neither a raised confidence cutoff nor a "
+            "length-normalized distance could separate this case from the "
+            "project's own canonical genuine typo example ('Naem'/'Name' has the "
+            "SAME normalized distance, 0.50 — checked directly, not assumed). "
+            "Root cause found instead: a full sweep of every KEY001 benchmark "
+            "case needing plain-Levenshtein distance 2 showed EVERY ONE was an "
+            "adjacent-letter transposition (e.g. 'Naem'/'Name'), while none of "
+            "the known false positives ('data'/'meta', 'port'/'host', "
+            "'SERVER_HOST'/'SERVER_PORT') were. Fix: switched to restricted "
+            "Damerau-Levenshtein distance (transpositions cost 1 edit, not 2) "
+            "and tightened the threshold from 2 to 1 accordingly — preserves "
+            "every genuine typo match while removing 3 of 4 known false "
+            "positives, verified via full benchmark re-run (FP count dropped "
+            "from 5 to 2, zero correct matches lost). FEATURE_X/FEATURE_Y and "
+            "ENABLE_CACHE/ENABLE_CACHED remain known, documented limitations — "
+            "explicitly out of scope for this fix, not an oversight."
         ),
     },
     {

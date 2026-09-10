@@ -11,18 +11,29 @@ evaluation/github/run_evaluation.py`.
 
 ## Headline result
 
-**15 fully correct, 4 correct-with-a-stated-caveat, 1 incorrect, out
-of 20** (originally 13/4/3 — GH-20 and GH-01 have since been fixed,
-see below) — a real number from a small, honestly-sourced sample, not
-a general accuracy claim (see the benchmark's own scope disclaimer,
-which applies equally here).
+**16 fully correct, 4 correct-with-a-stated-caveat, 0 incorrect, out
+of 20** (originally 13/4/3 — all three original failures, GH-20,
+GH-01, and GH-02, have since been fixed, see below) — a real number
+from a small, honestly-sourced sample, not a general accuracy claim
+(see the benchmark's own scope disclaimer, which applies equally
+here).
 
 | Outcome | Count | Cases |
 |---|---:|---|
-| Fully correct | 15 | GH-01,03,04,05,06,07,08,09,12,13,16,17,18,19,20 |
+| Fully correct | 16 | GH-01,02,03,04,05,06,07,08,09,12,13,16,17,18,19,20 |
 | Correct, immediate cause only | 3 | GH-10, 11, 15 |
 | Correct, generic phrasing | 1 | GH-14 |
-| **Incorrect** | **1** | **GH-02** |
+| **Incorrect** | **0** | — |
+
+**Zero incorrect, on a real, external evaluation set.** Worth being
+precise about what that does and doesn't mean: it's a genuine result
+on 20 real cases, not a claim that KEY001 (or any rule) now has zero
+false positives in general — `FEATURE_X`/`FEATURE_Y` and
+`ENABLE_CACHE`/`ENABLE_CACHED` remain known, documented limitations
+in the benchmark itself (see `benchmark/README.md`), just not
+represented in this particular 20-case external sample. The right
+next step if this number matters is growing this evaluation set
+further, not treating 0/20 as "solved."
 
 ## GH-01 — fixed
 
@@ -74,44 +85,56 @@ any of the other 89 benchmark cases. Then, and only then, this
 external evaluation was re-run to confirm the fix against the original
 real-world case.
 
-## The one remaining failure — the important part
+## GH-02 — fixed
 
-Per the instruction that started this evaluation: *"the failures are
-likely to teach us more than the successes."*
-
-### GH-02 — a confirmed instance of a known KEY001 limitation, found in the wild
-
-Real bug: [facebookarchive/python-instagram #235](https://github.com/facebookarchive/python-instagram/pull/235).
+Originally: a real, confirmed instance of a known KEY001 limitation.
 `'data'` and `'meta'` are both short, common words at edit distance 2
 — within KEY001's threshold — but `'data'` is a legitimately,
-sometimes-absent API field, not a typo of `'meta'`. TraceKit
-confidently suggested "did you mean `meta`?", which is wrong.
+sometimes-absent API field, not a typo of `'meta'`. Unlike GH-01, this
+wasn't a directional/wording problem — KEY001 matched the *wrong pair
+entirely*, and neither raising the confidence cutoff nor switching to
+a length-normalized distance could fix it: both were checked directly
+against real benchmark data (`docs/design/GH02-failure-analysis.md`,
+Stage 7) and both failed for a quantified reason — a length-normalized
+threshold tight enough to reject `data`/`meta` also rejects the
+project's own canonical genuine-typo example, `Naem`/`Name` (identical
+normalized distance, 0.50).
 
-This is the *same class* of false positive already documented in
-`benchmark/README.md` (the `FEATURE_X`/`FEATURE_Y` case) — but that
-was a synthetic, hand-written adversarial example. This is
-confirmation that the same failure mode occurs on genuine, unrelated
-external code, not just in a benchmark case designed to expose it.
-**Not yet fixed — and unlike GH-01, this isn't a directional/wording
-problem: KEY001 didn't just misstate its finding, it matched the wrong
-pair entirely.** Fixing this would need either a narrower distance
-threshold (at real precision/coverage cost — see `benchmark/README.md`'s
-documented tradeoff) or a genuinely new signal distinguishing "close
-enough to be a typo" from "close enough to be a coincidence," the same
-category of harder problem GH-01's Stage 2 design work declined to
-build without stronger evidence it's worth the cost. If this failure
-mode shows up again in a future real-world evaluation round, that's
-the evidence needed to revisit that decision.
+The actual fix, found by re-examining the failing cases directly
+(`docs/design/GH02-solution-design.md`, Stage 8): a full sweep of
+every KEY001 benchmark case needing plain-Levenshtein distance 2
+showed **every single one** was an adjacent-letter transposition
+(`Naem`/`Name`, `Heigth`/`Height`, `passwrod`/`password`, and others)
+— while none of the known false positives were. Switched to restricted
+Damerau-Levenshtein distance (a transposition costs 1 edit, not 2) and
+tightened the threshold from 2 to 1 accordingly. Verified via a full
+benchmark re-run: false positives dropped from 5 to 2, with **zero**
+correct matches lost. `FEATURE_X`/`FEATURE_Y` and
+`ENABLE_CACHE`/`ENABLE_CACHED` remain known, documented limitations —
+explicitly out of scope for this fix (see the contract's own stated
+scope, `docs/design/GH02-behavioral-contract.md`), not an oversight.
 
-### GH-01 and GH-20 — see their own "fixed" sections above
+## GH-01 and GH-20 — see their own "fixed" sections above
 
-Both were originally recorded as failures here. They're covered in
-their own sections above rather than here, since they've since been
-fixed, and each fix's process is itself worth keeping visible as its
-own story — particularly GH-01's, which took a full multi-stage design
-process (four documents in `docs/design/`) specifically to conclude
-that the *simplest* available fix (a wording change, not a new
-signal source) was the right one.
+Covered in their own sections above rather than repeated here, since
+each fix's process is itself worth keeping visible as its own story —
+particularly GH-01's, which took a full multi-stage design process
+specifically to conclude that the *simplest* available fix (a wording
+change, not a new signal source) was the right one, and GH-02's,
+which took an even longer process (docs/design/GH02-*.md, seven
+documents across failure analysis, solution design, and a behavioral
+contract) to arrive at a fix that required no new dependency at all.
+
+## No failures remain in this evaluation set
+
+All three originally-recorded failures (GH-20, GH-01, GH-02) are now
+fixed, each through the same benchmark-first discipline: understand
+the failure, evaluate candidate solutions with real evidence, freeze
+an exact contract, add ground truth, write RED tests, implement the
+smallest change the evidence actually supports, then verify against
+both the internal benchmark and this external evaluation. See "What
+this evaluation does NOT do" below for what that does and doesn't
+mean going forward.
 
 ## What generalized well
 
@@ -143,13 +166,15 @@ signal source) was the right one.
 
 ## What this evaluation does NOT do
 
-- GH-02 is not yet fixed. Per the same benchmark-first discipline used
-  throughout this project, a fix earns its place by being benchmarked,
-  not patched reactively the moment a failure is found. GH-20 and
-  GH-01 both followed that discipline in full and are now fixed (see
-  above); GH-02 remains logged as a finding for a future rule-review
-  cycle, since fixing it would trade away real precision/coverage or
-  need a genuinely new signal source, not a one-line change.
+- It does not claim TraceKit is now free of false positives in
+  general. `FEATURE_X`/`FEATURE_Y` and `ENABLE_CACHE`/`ENABLE_CACHED`
+  remain known, documented limitations in `benchmark/README.md` —
+  they simply aren't represented in this particular 20-case sample.
+  All three fixes here (GH-20, GH-01, GH-02) followed the same
+  benchmark-first discipline throughout this project: a fix earns its
+  place by being benchmarked and evidenced, not patched reactively the
+  moment a failure is found — and that discipline applies equally to
+  whatever this evaluation set turns up next, if it's grown further.
 - It is not a claim that TraceKit "handles real code" in general — 20
   cases, sourced by one person's search session, is a real but small
   sample. Treat these numbers exactly as the benchmark's own numbers

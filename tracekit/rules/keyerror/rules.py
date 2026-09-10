@@ -20,15 +20,38 @@ from typing import Optional
 from tracekit.core.context import ExceptionContext
 from tracekit.core.rule import MatchResult, Rule
 
-# Tuned against the benchmark, not guessed — see benchmark/README.md
-# for the precision/coverage numbers at distance 1 vs 2 vs 3 that
-# justified this default.
-DEFAULT_MAX_EDIT_DISTANCE = 2
+# Originally tuned against the benchmark at plain-Levenshtein distance
+# 1 vs 2 vs 3 (see benchmark/README.md's history). Changed to 1 when
+# the distance metric switched to Damerau-Levenshtein — a full sweep
+# (docs/design/GH02-behavioral-contract.md, Stage 10) found every
+# genuine match that needed distance 2 under the old metric was a
+# transposition, collapsing to distance 1 under the new one.
+DEFAULT_MAX_EDIT_DISTANCE = 1
 
 
 def _levenshtein(a: str, b: str) -> int:
-    """Standard DP edit distance. Small strings only (keys), so O(n*m)
-    is not a performance concern here."""
+    """
+    Restricted Damerau-Levenshtein distance (Optimal String Alignment /
+    OSA variant) — small strings only (keys), so O(n*m) is not a
+    performance concern here. Function name kept as `_levenshtein` for
+    minimal diff (see docs/design/GH02-behavioral-contract.md — no
+    concrete reason found to rename it).
+
+    Same as plain Levenshtein (insertion, deletion, substitution),
+    PLUS: an adjacent transposition (swapping two neighboring
+    characters, e.g. 'Naem' -> 'Name') costs 1 edit instead of 2.
+
+    Why this exists: a full sweep of the benchmark (Stage 10) found
+    that EVERY currently-correct KEY001 match needing the old
+    threshold of 2 was actually a transposition — the old threshold
+    was never really tolerating "2 independent character changes," it
+    was compensating for plain Levenshtein's inability to see a
+    transposition as a single mistake. None of the known false
+    positives (e.g. 'data'/'meta', GH-02) are transpositions, so
+    recognizing this pattern explicitly lets the threshold tighten to
+    1 without losing any genuine typo match — see the design docs for
+    the full evidence trail.
+    """
     if a == b:
         return 0
     if not a:
@@ -36,18 +59,29 @@ def _levenshtein(a: str, b: str) -> int:
     if not b:
         return len(a)
 
-    prev = list(range(len(b) + 1))
-    for i, ca in enumerate(a, start=1):
-        curr = [i] + [0] * len(b)
-        for j, cb in enumerate(b, start=1):
-            cost = 0 if ca == cb else 1
-            curr[j] = min(
-                prev[j] + 1,       # deletion
-                curr[j - 1] + 1,   # insertion
-                prev[j - 1] + cost # substitution
+    len_a, len_b = len(a), len(b)
+    d = [[0] * (len_b + 1) for _ in range(len_a + 1)]
+    for i in range(len_a + 1):
+        d[i][0] = i
+    for j in range(len_b + 1):
+        d[0][j] = j
+
+    for i in range(1, len_a + 1):
+        for j in range(1, len_b + 1):
+            cost = 0 if a[i - 1] == b[j - 1] else 1
+            d[i][j] = min(
+                d[i - 1][j] + 1,        # deletion
+                d[i][j - 1] + 1,        # insertion
+                d[i - 1][j - 1] + cost, # substitution
             )
-        prev = curr
-    return prev[-1]
+            if (
+                i > 1 and j > 1
+                and a[i - 1] == b[j - 2]
+                and a[i - 2] == b[j - 1]
+            ):
+                d[i][j] = min(d[i][j], d[i - 2][j - 2] + 1)  # transposition
+
+    return d[len_a][len_b]
 
 
 def _closest(target: str, candidates: list[str]) -> tuple[Optional[str], int, bool]:
