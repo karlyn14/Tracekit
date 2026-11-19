@@ -1,8 +1,8 @@
 # TraceKit
 
 ![CI](https://img.shields.io/badge/CI-GitHub%20Actions-blue)
-![Tests](https://img.shields.io/badge/tests-51%20passed-brightgreen)
-![Coverage](https://img.shields.io/badge/coverage-92%25-brightgreen)
+![Tests](https://img.shields.io/badge/tests-71%20passed-brightgreen)
+![Coverage](https://img.shields.io/badge/coverage-93%25-brightgreen)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 
 TraceKit diagnoses common Python exceptions and suggests likely causes
@@ -13,14 +13,41 @@ KeyError: 'Nmae'
 
 --- TraceKit suggestions (not certainty — verify against your code) ---
 
-[KEY001] Likely cause (confidence 0.40):
-  'Nmae' is not a key — did you mean 'Name'?
+[KEY001] Likely cause (confidence 0.65):
+  'Nmae' is not a key — the closest existing key is 'Name' (edit distance 1).
   Evidence:
     - Requested key: 'Nmae'
     - Closest available key: 'Name'
-    - Edit distance: 2
+    - Edit distance: 1
   Suggested fix: Check for a typo: 'Nmae' vs 'Name'
 ```
+
+## Command-line usage
+
+TraceKit is not published on PyPI. From a clone of this repository,
+`python -m pip install .` installs the `tracekit` command; the
+`tracekit.cli` module can also be run directly as
+`python -m tracekit.cli`. There is one subcommand, `diagnose`, which
+takes a single path:
+
+```bash
+tracekit diagnose crash.py        # run the script, diagnose what it raises
+tracekit diagnose traceback.txt   # best-effort diagnosis of a pasted traceback
+```
+
+- **A `.py` file is executed.** It runs as `__main__` and the first
+  uncaught exception is diagnosed with its real traceback, so every
+  rule has the live variables it needs. If the script raises nothing,
+  TraceKit says so and exits 0.
+- **Any other file is read as pasted traceback text.** TraceKit parses
+  the last exception line only. With no live objects, most rules
+  cannot fire, so expect "No rule matched" often; this mode only
+  reconstructs `KeyError` and `AttributeError`. For a full diagnosis,
+  run the script itself.
+- Output is plain text: the top-ranked rule, its confidence, the
+  reason and the suggested fix. A missing file, or a text file with no
+  recognizable exception line, prints an error and exits 1. There are
+  no other options besides `-h`.
 
 ## Problem
 
@@ -106,8 +133,10 @@ roadmap decision, not just "since we're here."
 Every rule earns its place with evidence, not intuition. Full detail
 in `benchmark/README.md`; summary here:
 
-- **84 cases**, hand-written + Stack-Overflow-style + GitHub-issue-style,
-  split into train/test.
+- **106 cases** — KeyError 90 (54 train / 36 test) and AttributeError
+  16 (9 train / 7 test) — hand-written + Stack-Overflow-style +
+  GitHub-issue-style, split into train/test. The held-out test split is
+  43 cases: 24 positive, 19 negative.
 - **Rules are designed only against the train split.** All reported
   metrics run exclusively on the held-out test split — this is the
   direct fix for dataset leakage (designing a rule against a case,
@@ -130,19 +159,32 @@ percentage below is measured on TraceKit's own benchmark dataset
 (`benchmark/data/*_cases.jsonl`, one file per exception family), split
 train/test, currently covering KeyError and AttributeError. It is not
 a general claim about Python error diagnosis, and it is not validated
-against a truly independent, external dataset. Treat these as
+against a truly independent, external dataset (a small separate
+external check is described under "Real-world evaluation" below).
+Treat these as
 "measured on this benchmark, under this methodology" — not as
 universal accuracy claims. See `benchmark/README.md` for exactly
 what's in the dataset and its known composition/size limitations.
 
-| Rule   | Strategy                     | Precision@1 | Coverage | FP Rate | Avg Confidence | Avg Exec Time |
-|--------|-------------------------------|------------:|---------:|--------:|---------------:|--------------:|
-| KEY001 | Fuzzy lexical similarity       | 100%        | 100%     | ~25%    | 0.57           | 0.036 ms      |
-| KEY002 | Deterministic normalization     | 100%        | 100%     | 0%      | 0.95           | 0.003 ms      |
-| KEY003 | Structural context analysis    | 100%        | 100%     | 0%      | 0.90           | 0.001 ms      |
-| ATTR001| Runtime object inspection      | 100%        | 100%     | 0%      | 0.98           | 0.002 ms      |
-| ATTR002| Deterministic API lookup       | 100%        | 100%     | 0%      | 0.95           | 0.003 ms      |
-| ATTR003| Lexical typo heuristic         | 100%        | 100%     | 0%      | 0.84           | 0.089 ms      |
+| Rule   | Strategy                     | Precision@1 | Coverage | False positives (of 19 negative cases) | Avg Confidence | Avg Exec Time |
+|--------|-------------------------------|------------:|---------:|--------------------------------------:|---------------:|--------------:|
+| KEY001 | Fuzzy lexical similarity       | 100%        | 100%     | 2                                     | 0.65           | 0.036 ms      |
+| KEY002 | Deterministic normalization     | 100%        | 100%     | 0                                     | 0.95           | 0.003 ms      |
+| KEY003 | Structural context analysis    | 100%        | 100%     | 0                                     | 0.90           | 0.001 ms      |
+| ATTR001| Runtime object inspection      | 100%        | 100%     | 0                                     | 0.98           | 0.002 ms      |
+| ATTR002| Deterministic API lookup       | 100%        | 100%     | 0                                     | 0.95           | 0.003 ms      |
+| ATTR003| Lexical typo heuristic         | 100%        | 100%     | 0                                     | 0.84           | 0.089 ms      |
+
+**Overall, on the 43-case held-out test split (24 positive, 19
+negative):** Precision@1 24/24 = 100%, Precision@3 24/24 = 100%,
+positive coverage 24/24 = 100%, and an **overall false-positive rate
+of 2/19 negative cases = 10.5% (≈11%)**. The denominator is the
+negative test cases — cases where no rule should fire. Both false
+positives are KEY001 (`KEY001-043`, `KEY001-074`), so the table's
+false-positive column is a count, not a per-rule rate: the 11% figure
+is the benchmark-wide rate, not a KEY001-specific one. 26 of the 43
+cases produced a suggestion and 17 abstained. (Execution-time figures
+in the table are from an earlier run and vary run to run.)
 
 **Hypothesis, supported by the above:** deterministic diagnostic
 strategies (KEY002, KEY003, ATTR001, ATTR002) reliably achieve zero
@@ -161,14 +203,33 @@ O(1) lookup, still negligible in absolute terms. (Timing figures carry
 normal run-to-run jitter — see `benchmark/run.py`'s p95 reporting for
 a steadier picture than a single average.)
 
+## Real-world evaluation
+
+[`evaluation/github/`](evaluation/github/) holds a small external
+evaluation: 20 exception examples taken from public GitHub issues and
+pull requests, run through TraceKit's actual `analyze()` code path and
+judged against each real-world fix. Result: **16 fully correct, 4
+correct with a stated caveat, 0 incorrect, out of 20.** The first run
+scored 13/4/3; the three failures (GH-20, GH-01, GH-02) were then fixed,
+so 16/4/0 is measured on a sample those fixes were driven by. It is a
+small sample and not proof of broad generalization. Method, per-case
+results and the analysis of each fix are in
+[`evaluation/github/README.md`](evaluation/github/README.md) and
+[`methodology.md`](evaluation/github/methodology.md). To rerun:
+`python evaluation/github/run_evaluation.py`.
+
 ## Known limitations (documented, not hidden)
 
-- **KEY001 has a real, measured false-positive rate (~25% on adversarial
-  cases).** Raw edit distance cannot distinguish "typo of an existing
-  key" from "a different key that happens to look similar"
-  (`FEATURE_X`/`FEATURE_Y`, `SERVER_HOST`/`SERVER_PORT`). Further
-  reducing this would need semantic/contextual signals beyond lexical
-  similarity — out of scope for KEY001 by design.
+- **KEY001 has a real, measured false-positive risk.** On the current
+  held-out split, both of the benchmark's false positives (2 of 19
+  negative cases, 10.5%, ≈11% overall) come from KEY001. That 11% is
+  the benchmark-wide rate over negative cases, not a KEY001-specific
+  rate. (An earlier ~25% figure came from an older, smaller dataset and
+  is historical, not current.) Edit distance cannot distinguish "typo
+  of an existing key" from "a different key that happens to look
+  similar" (e.g. `FEATURE_X`/`FEATURE_Y`, `ENABLE_CACHE`/`ENABLE_CACHED`).
+  Further reducing this would need semantic/contextual signals beyond
+  lexical similarity — out of scope for KEY001 by design.
 - **v1 diagnoses the raise site, not upstream causal chains.** If
   `foo()` returns `None` and `x.name` then raises `AttributeError`,
   TraceKit explains the immediate `AttributeError`, not that `foo()`
@@ -190,8 +251,14 @@ work:
 - **Raw edit distance overestimates typo likelihood for semantically
   distinct identifiers.** Distance-1/2 pairs like `SERVER_HOST`/
   `SERVER_PORT` or `FEATURE_X`/`FEATURE_Y` are common in real
-  configuration code and are indistinguishable from genuine typos
-  using lexical similarity alone.
+  configuration code and, under plain Levenshtein distance, were
+  indistinguishable from genuine typos. `SERVER_HOST`/`SERVER_PORT`
+  was one of the false positives this caused; GH-02 (restricted
+  Damerau-Levenshtein, maximum distance 1) removed it. Pairs that
+  differ by one inserted or substituted character, such as
+  `FEATURE_X`/`FEATURE_Y` and `ENABLE_CACHE`/`ENABLE_CACHED`, still
+  cannot be told apart from a typo by lexical similarity alone; they
+  are the two current false positives (`KEY001-043`, `KEY001-074`).
 - **Ambiguity detection reduced false positives without reducing
   coverage.** Abstaining when two candidates tie for closest match
   (e.g. `'it'` equidistant from `'id'` and `'ip'`) dropped the
@@ -237,6 +304,21 @@ work:
   rediscovering.
 
 ## Releases
+
+**v2.1.0** (upcoming minor release — not yet tagged or released) —
+Builds on v2.0.0 without adding a new exception family. Added: the
+`tracekit diagnose` command-line interface; a 20-example external
+evaluation against real GitHub issues (`evaluation/github/`, 16 fully
+correct / 4 correct with caveat / 0 incorrect); an MIT `LICENSE`.
+Changed: KEY001 now uses restricted Damerau-Levenshtein distance
+(an adjacent-character swap counts as one edit) with a maximum edit
+distance of 1, which removed the `data`/`meta`-style false positive
+(GH-02); KEY001's explanation no longer assumes which of the two
+spellings is the correct one (GH-01). Fixed: KeyError messages written
+as full sentences, such as pandas' `.astype()` error, are now read
+correctly (GH-20), and dunder-named locals such as `__builtins__` are
+no longer pooled into candidate keys at module scope. The benchmark
+dataset grew to 106 cases (90 KeyError) and the suite to 71 tests.
 
 **v2.0.0** — Two exception families closed. KeyError (KEY001-003) and
 AttributeError (ATTR001-003), 6 accepted rules across 6 distinct
@@ -359,6 +441,11 @@ here rather than only quoting a single current number.
 | v1.0.0 (KEY001-003) | 22 | ~0.6s | ~0.05s | 92% |
 | ATTR001 added | 31 | ~0.9s | ~0.07s | 92% |
 | AttributeError closed (ATTR001-003) | 51 | ~1.8s | ~0.09s | 92% |
+| v2.1.0 (upcoming; current) | 71 | ~1s | not re-measured | 93% |
+
+The v2.1.0 coverage figure is from the pre-release audit and was not
+re-measured when this table was updated; benchmark runtime was not
+re-measured for that row. Earlier rows are historical.
 
 ## Demo
 
@@ -373,8 +460,9 @@ python demo.py --fast   # no pauses, good for CI or a quick check
 
 ## Testing & CI
 
-- **51 tests, 92% coverage** — unit tests per rule
-  (`tests/test_keyerror.py`, `tests/test_attributeerror.py`)
+- **71 tests, 93% coverage** — unit tests per rule
+  (`tests/test_keyerror.py`, `tests/test_attributeerror.py`), CLI
+  tests (`tests/test_cli.py`)
   plus property-based fuzz tests (`tests/test_property_based.py`, via
   [Hypothesis](https://hypothesis.readthedocs.io/)) that generate ~250
   arbitrary/malformed inputs (unicode keys, missing tracebacks,
@@ -396,3 +484,7 @@ python -m pytest tests/ --cov=tracekit --cov-report=term-missing  # with coverag
 python -m benchmark.run                                   # full benchmark report
 python smoke_test.py                                       # end-to-end sanity check
 ```
+
+## License
+
+MIT. See [`LICENSE`](LICENSE).

@@ -4,9 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tracekit"
-version = "2.0.0"
+version = "2.1.0"
 description = "Diagnoses common Python exceptions and suggests likely (not certain) causes, without hiding the original traceback."
 requires-python = ">=3.10"
+license = {file = "LICENSE"}
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+]
 
 [project.scripts]
 tracekit = "tracekit.cli:main"
